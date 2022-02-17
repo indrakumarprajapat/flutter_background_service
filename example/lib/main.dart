@@ -11,7 +11,9 @@ void main() {
 
 Future<void> initializeService() async {
   final service = FlutterBackgroundService();
+
   await service.configure(
+
     androidConfiguration: AndroidConfiguration(
       // this will executed when app is in foreground or background in separated isolate
       onStart: onStart,
@@ -20,6 +22,7 @@ Future<void> initializeService() async {
       autoStart: true,
       isForegroundMode: true,
     ),
+
     iosConfiguration: IosConfiguration(
       // auto start service
       autoStart: true,
@@ -41,8 +44,10 @@ void onIosBackground() {
 }
 
 void onStart() {
+
   WidgetsFlutterBinding.ensureInitialized();
   final service = FlutterBackgroundService();
+
   service.onDataReceived.listen((event) {
     if (event!["action"] == "setAsForeground") {
       service.setForegroundMode(true);
@@ -60,15 +65,22 @@ void onStart() {
 
   // bring to foreground
   service.setForegroundMode(true);
-  Timer.periodic(Duration(seconds: 1), (timer) async {
+  Timer.periodic(Duration(seconds: 5), (timer) async {
     if (!(await service.isServiceRunning())) timer.cancel();
+
     service.setNotificationInfo(
       title: "My App Service",
       content: "Updated at ${DateTime.now()}",
     );
 
+
     service.sendData(
       {"current_date": DateTime.now().toIso8601String()},
+    );
+
+
+    service.mqttSendData(
+        {"mqttSendData": DateTime.now().toIso8601String()}
     );
   });
 }
@@ -113,8 +125,7 @@ class _MyAppState extends State<MyApp> {
             ElevatedButton(
               child: Text("Background Mode"),
               onPressed: () {
-                FlutterBackgroundService()
-                    .sendData({"action": "setAsBackground"});
+                FlutterBackgroundService().sendData({"action": "setAsBackground"});
               },
             ),
             ElevatedButton(
