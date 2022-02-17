@@ -62,24 +62,24 @@ void onStart() {
 
   // bring to foreground
   service.setForegroundMode(true);
-  Timer.periodic(Duration(seconds: 5), (timer) async {
-    if (!(await service.isServiceRunning())) timer.cancel();
-
-    service.setNotificationInfo(
-      title: "My App Service",
-      content: "Updated at ${DateTime.now()}",
-    );
-
-
-    service.sendData(
-      {"current_date": DateTime.now().toIso8601String()},
-    );
-
-
-    service.mqttSendData(
-        {"mqttSendData": DateTime.now().toIso8601String()}
-    );
-  });
+  // Timer.periodic(Duration(seconds: 5), (timer) async {
+  //   if (!(await service.isServiceRunning())) timer.cancel();
+  //
+  //   service.setNotificationInfo(
+  //     title: "My App Service",
+  //     content: "Updated at ${DateTime.now()}",
+  //   );
+  //
+  //
+  //   service.sendData(
+  //     {"current_date": DateTime.now().toIso8601String()},
+  //   );
+  //
+  //
+  //   service.mqttSendData(
+  //       {"mqttSendData": DateTime.now().toIso8601String()}
+  //   );
+  // });
 }
 
 class MyApp extends StatefulWidget {
@@ -98,20 +98,6 @@ class _MyAppState extends State<MyApp> {
         ),
         body: Column(
           children: [
-            StreamBuilder<Map<String, dynamic>?>(
-              stream: FlutterBackgroundService().onDataReceived,
-              builder: (context, snapshot) {
-                if (!snapshot.hasData) {
-                  return Center(
-                    child: CircularProgressIndicator(),
-                  );
-                }
-
-                final data = snapshot.data!;
-                DateTime? date = DateTime.tryParse(data["current_date"]);
-                return Text(date.toString());
-              },
-            ),
             ElevatedButton(
               child: Text("Foreground Mode"),
               onPressed: () {

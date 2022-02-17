@@ -131,7 +131,6 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
         notificationContent = "Preparing";
         updateNotificationInfo();
 //        monitorNetwork();
-
     }
 
     @Override
@@ -277,6 +276,8 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
                             connectTimer.cancel();
                             connectTimer = null;
                         }
+                        this.subscribeTopic("testb");
+                        handleSubscriptionResponse();
                     }).addDisconnectedListener(context -> {
                         Log.d(">>> Disconnected ", context.toString());
                         int PERIOD = 10;
@@ -310,9 +311,6 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
     private void publishMessageHive(String msg) {
         publishMessage("a/test", msg);
         this.subscribeTopic("testa");
-        this.subscribeTopic("testb");
-
-        handleSubscriptionResponse();
     }
 
     void handleSubscriptionResponse() {
@@ -321,7 +319,15 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
                     Log.d(">>> G >>> ", mqtt3Publish.toString());
                     if (methodChannel != null) {
                         try {
-                            methodChannel.invokeMethod("onReceiveData", mqtt3Publish.toString());
+                            String topic = mqtt3Publish.getTopic().toString();
+                            String payload = new String(mqtt3Publish.getPayloadAsBytes());
+                            JSONObject mqData = new JSONObject();
+                            mqData.put("topic",topic);
+                            mqData.put("payload",payload);
+                            LocalBroadcastManager manager = LocalBroadcastManager.getInstance(this);
+                            Intent intent = new Intent("id.flutter/background_service");
+                            intent.putExtra("data", mqData.toString());
+                            manager.sendBroadcast(intent);
                         } catch (Exception e) {
                             e.printStackTrace();
                         }
