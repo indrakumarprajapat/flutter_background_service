@@ -16,6 +16,7 @@ import android.media.RingtoneManager;
 import android.net.ConnectivityManager;
 import android.net.Network;
 import android.net.NetworkCapabilities;
+import android.net.NetworkRequest;
 import android.net.Uri;
 import android.os.Build;
 import android.os.IBinder;
@@ -134,7 +135,6 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
         createNotificationChannel();
         notificationContent = "Preparing";
         updateNotificationInfo();
-//        monitorNetwork();
     }
 
     @Override
@@ -198,48 +198,6 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
         }
     }
 
-    protected void newBookingNotification() {
-        if (isForegroundService(this)) {
-            String packageName = getApplicationContext().getPackageName();
-            Intent i = getPackageManager().getLaunchIntentForPackage(packageName);
-            PendingIntent pi;
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                pi = PendingIntent.getActivity(BackgroundService.this, 99778, i, PendingIntent.FLAG_CANCEL_CURRENT | PendingIntent.FLAG_MUTABLE);
-            } else {
-                pi = PendingIntent.getActivity(BackgroundService.this, 99778, i, PendingIntent.FLAG_CANCEL_CURRENT);
-            }
-
-            NotificationCompat.Builder mBuilder = new NotificationCompat.Builder(this, "FOREGROUND_DEFAULT")
-                    .setSmallIcon(R.drawable.ic_bg_service_small)
-                    .setAutoCancel(true)
-                    .setOngoing(true)
-                    .setContentTitle(notificationTitle)
-                    .setContentText("this is new sound notificaiton")
-                    .setContentIntent(pi);
-
-            startForeground(99778, mBuilder.build());
-
-
-           MediaPlayer mediaPlayer = MediaPlayer.create(this, R.raw.booking);
-            try {
-                if (mediaPlayer != null) {//check if it's been already initialized.
-                    MediaPlayer finalMediaPlayer = mediaPlayer;
-                    new Timer().schedule(new TimerTask() {
-                        @Override
-                        public void run() {
-                            finalMediaPlayer.start(); //start play t
-                        }
-                    }, 0);
-                }
-            } catch (Exception ex) {
-                if (mediaPlayer != null) {
-                    mediaPlayer.release();
-                    mediaPlayer = null;
-                }
-            }
-        }
-    }
-
     @RequiresApi(api = Build.VERSION_CODES.LOLLIPOP)
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
@@ -250,23 +208,24 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
         initializeConnection();
 
         getLock(getApplicationContext()).acquire();
-
-
+        monitorNetwork();
         return START_STICKY;
     }
 
-//    @RequiresApi(api = Build.VERSION_CODES.LOLLIPOP)
-//    private void monitorNetwork() {
-//        NetworkRequest networkRequest = new NetworkRequest.Builder()
-//                .addCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
-//                .addTransportType(NetworkCapabilities.TRANSPORT_WIFI)
-//                .addTransportType(NetworkCapabilities.TRANSPORT_CELLULAR)
-//                .build();
-//
-//        ConnectivityManager connectivityManager = (ConnectivityManager) this.getSystemService(this.CONNECTIVITY_SERVICE);
-//        connectivityManager.requestNetwork(networkRequest, networkCallback);
-//    }
-
+    @RequiresApi(api = Build.VERSION_CODES.LOLLIPOP)
+    private void monitorNetwork() {
+        try{
+            NetworkRequest networkRequest = new NetworkRequest.Builder()
+                    .addCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
+                    .addTransportType(NetworkCapabilities.TRANSPORT_WIFI)
+                    .addTransportType(NetworkCapabilities.TRANSPORT_CELLULAR)
+                    .build();
+            ConnectivityManager connectivityManager = (ConnectivityManager) this.getSystemService(this.CONNECTIVITY_SERVICE);
+            connectivityManager.requestNetwork(networkRequest, networkCallback);
+        }catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
 
     AtomicBoolean isRunning = new AtomicBoolean(false);
 
@@ -354,35 +313,43 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
         }
     }
 
-    private void publishMessageHive(String msg) {
-        publishMessage("a/test", msg);
-        this.subscribeTopic("testa");
-    }
-
     void handleSubscriptionResponse() {
+        final String ENV_PREFIX = "s";
         hive_client.publishes(MqttGlobalPublishFilter.ALL,
                 mqtt3Publish -> {
+                    try {
+                        Log.d(">>> G >>> ", mqtt3Publish.toString());
 
-                    newBookingNotification();
+                        String topic = mqtt3Publish.getTopic().toString();
+                        String payload = new String(mqtt3Publish.getPayloadAsBytes());
+                        JSONObject mqData = new JSONObject();
+                        mqData.put("mqdata", "mqttResponse");
+                        mqData.put("topic", topic);
+                        mqData.put("payload", payload);
 
-                    Log.d(">>> G >>> ", mqtt3Publish.toString());
-                    if (methodChannel != null) {
-                        try {
-
-                            String topic = mqtt3Publish.getTopic().toString();
-                            String payload = new String(mqtt3Publish.getPayloadAsBytes());
-                            JSONObject mqData = new JSONObject();
-                            mqData.put("data", "mqttResponse");
-                            mqData.put("topic", topic);
-                            mqData.put("payload", payload);
-                            LocalBroadcastManager manager = LocalBroadcastManager.getInstance(this);
-                            Intent intent = new Intent("id.flutter/background_service");
-                            intent.putExtra("data", mqData.toString());
-                            manager.sendBroadcast(intent);
-
-                        } catch (Exception e) {
-                            e.printStackTrace();
+                        if (topic.startsWith(ENV_PREFIX + "/driverwaiting4booking") ||
+                                topic.startsWith(ENV_PREFIX + "/previousbookingrequest")){
+                            showNotification(NotificationType.BOOKING_REQUEST,topic,payload);
+                        }else if (topic.endsWith("/cancel")) {
+                            showNotification(NotificationType.BOOKING_CANCELLED,topic,payload);
+                        }else if (topic
+                                .startsWith(ENV_PREFIX + "/cancelBeforeAcceptBooking")) {
+                            showNotification(NotificationType.BOOKING_CANCELLED,topic,payload);
+                        }else if (topic.contains("/paymentDoneByCust/")) {
+                            showNotification(NotificationType.PAYMENT_DONE,topic,payload);
                         }
+                        if (methodChannel != null) {
+                            try {
+                                LocalBroadcastManager manager = LocalBroadcastManager.getInstance(this);
+                                Intent intent = new Intent("id.flutter/background_service");
+                                intent.putExtra("data", mqData.toString());
+                                manager.sendBroadcast(intent);
+                            } catch (Exception e) {
+                                e.printStackTrace();
+                            }
+                        }
+                    } catch (JSONException e) {
+                        e.printStackTrace();
                     }
                 });
     }
@@ -407,7 +374,6 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
                 .send();
     }
 
-
     public void receiveData(JSONObject data) {
         if (methodChannel != null) {
             try {
@@ -421,10 +387,8 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
     @Override
     public void onMethodCall(@NonNull MethodCall call, @NonNull MethodChannel.Result result) {
         String method = call.method;
-
         try {
             if (method.equalsIgnoreCase("setNotificationInfo")) {
-
                 JSONObject arg = (JSONObject) call.arguments;
                 if (arg.has("title")) {
                     notificationTitle = arg.getString("title");
@@ -484,32 +448,34 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
                 return;
 
             }
-            if (method.equalsIgnoreCase("onMqttReceiveData")) {
 
-                LocalBroadcastManager manager = LocalBroadcastManager.getInstance(this);
-                Intent intent = new Intent("id.flutter/background_service");
-                intent.putExtra("data", ((JSONObject) call.arguments).toString());
-                manager.sendBroadcast(intent);
-                result.success(true);
-                return;
-
-            }
-
-            if (method.equalsIgnoreCase("mqttSendData")) {
-                publishMessageHive(((JSONObject) call.arguments).toString());
+            if (method.equalsIgnoreCase("mqPublishMessage")) {
+                JSONObject arg = (JSONObject) call.arguments;
+                if (arg.has("topic")) {
+                    String topic = arg.getString("topic");
+                    String payload = arg.getString("payload");
+                    result.success(true);
+                    publishMessage(topic, payload);
+                }
                 return;
             }
 
-            if (method.equalsIgnoreCase("subscribeTopic")) {
-                String arg = (String) call.arguments;
-                hive_client.subscribeWith().
-                        topicFilter(arg).
-                        qos(MqttQos.EXACTLY_ONCE).send();
+            if (method.equalsIgnoreCase("mqSubscribeTopic")) {
+                JSONObject arg = (JSONObject) call.arguments;
+                if (arg.has("topic")) {
+                    String topic = arg.getString("topic");
+                    result.success(true);
+                    subscribeTopic(topic);
+                }
                 return;
             }
-            if (method.equalsIgnoreCase("unSubscribeTopic")) {
-                String topicName = (String) call.arguments;
-                hive_client.unsubscribeWith().topicFilter(topicName).send();
+            if (method.equalsIgnoreCase("mqUnSubscribeTopic")) {
+                JSONObject arg = (JSONObject) call.arguments;
+                if (arg.has("topic")) {
+                    String topic = arg.getString("topic");
+                    result.success(true);
+                    unSubscribeTopic(topic);
+                }
                 return;
             }
 
@@ -534,7 +500,6 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
         public void onLost(@NonNull Network network) {
             super.onLost(network);
             Log.d(">>>> conection >>>", ".onLost(network)");
-
         }
 
         @Override
@@ -545,5 +510,68 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
         }
     };
 
+    enum NotificationType{
+        BOOKING_REQUEST,
+        BOOKING_CANCELLED,
+        PAYMENT_DONE
+    }
+    protected void showNotification(NotificationType notificationType,String topic,String payload) {
+        if (isForegroundService(this)) {
+            Intent intent = new Intent(this, WatchdogReceiver.class);
+            intent.putExtra("FOREGROUND_DEFAULT", 0);
+            PendingIntent pi;
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                pi = PendingIntent.getActivity(BackgroundService.this, 99778, intent, PendingIntent.FLAG_CANCEL_CURRENT | PendingIntent.FLAG_MUTABLE);
+            } else {
+                pi = PendingIntent.getActivity(BackgroundService.this, 99778, intent, PendingIntent.FLAG_CANCEL_CURRENT);
+            }
+            if(notificationType == NotificationType.BOOKING_REQUEST){
+                NotificationCompat.Builder builder = new NotificationCompat.Builder(this, "FOREGROUND_DEFAULT")
+                        .setSmallIcon(R.drawable.ic_bg_service_small)
+                        .setContentTitle("New Booking Request")
+                        .setContentText(payload)
+                        .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+//                    .setContentIntent(pi)
+                        .addAction(R.drawable.ic_bg_service_small, getString(R.string.accept), pi)
+                        .addAction(R.drawable.ic_bg_service_small, getString(R.string.pass), pi);
+                startForeground(99778, builder.build());
+
+                MediaPlayer mediaPlayer = MediaPlayer.create(this, R.raw.booking);
+                try {
+                    if (mediaPlayer != null) {//check if it's been already initialized.
+                        MediaPlayer finalMediaPlayer = mediaPlayer;
+                        new Timer().schedule(new TimerTask() {
+                            @Override
+                            public void run() {
+                                finalMediaPlayer.start(); //start play t
+                            }
+                        }, 0);
+                    }
+                } catch (Exception ex) {
+                    if (mediaPlayer != null) {
+                        mediaPlayer.release();
+                        mediaPlayer = null;
+                    }
+                }
+            }else if(notificationType == NotificationType.BOOKING_CANCELLED){
+                NotificationCompat.Builder builder = new NotificationCompat.Builder(this, "FOREGROUND_DEFAULT")
+                        .setSmallIcon(R.drawable.ic_bg_service_small)
+                        .setContentTitle("Booking Cancelled")
+                        .setContentText(payload)
+                        .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+                        .addAction(R.drawable.ic_bg_service_small, getString(R.string.openapp), pi);
+                startForeground(99778, builder.build());
+
+            }else if(notificationType == NotificationType.PAYMENT_DONE){
+                NotificationCompat.Builder builder = new NotificationCompat.Builder(this, "FOREGROUND_DEFAULT")
+                        .setSmallIcon(R.drawable.ic_bg_service_small)
+                        .setContentTitle("Payment Completed")
+                        .setContentText(payload)
+                        .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+                        .addAction(R.drawable.ic_bg_service_small, getString(R.string.openapp), pi);
+                startForeground(99778, builder.build());
+            }
+        }
+    }
 
 }

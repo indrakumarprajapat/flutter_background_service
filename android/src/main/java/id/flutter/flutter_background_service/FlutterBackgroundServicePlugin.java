@@ -172,7 +172,7 @@ public class FlutterBackgroundServicePlugin extends BroadcastReceiver implements
                     channel.invokeMethod("onReceiveData", jData);
                 }
 
-                if ("mqttResponse".equals(jData.getString("data"))) {
+                if ("mqttResponse".equals(jData.getString("mqdata"))) {
                     if (eventChannel != null && mqttResponse != null) {
                         mqttResponse.success(jData);
                     }
