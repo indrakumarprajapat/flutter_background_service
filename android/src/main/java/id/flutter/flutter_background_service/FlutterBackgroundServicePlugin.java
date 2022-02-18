@@ -63,12 +63,18 @@ public class FlutterBackgroundServicePlugin extends BroadcastReceiver implements
     }
 
 
-    private static void configure(Context context, long callbackHandleId, boolean isForeground, boolean autoStartOnBoot) {
+    private static void configure(Context context, long callbackHandleId, boolean isForeground, boolean autoStartOnBoot,
+                                  String mqServerHost,int mqPort, String mqUsername, String mqPassword,String mqClientId) {
         SharedPreferences pref = context.getSharedPreferences("id.flutter.background_service", MODE_PRIVATE);
         pref.edit()
                 .putLong("callback_handle", callbackHandleId)
                 .putBoolean("is_foreground", isForeground)
                 .putBoolean("auto_start_on_boot", autoStartOnBoot)
+                .putString("mq_server_host", mqServerHost)
+                .putInt("mq_port", mqPort)
+                .putString("mq_username", mqUsername)
+                .putString("mq_password", mqPassword)
+                .putString("mq_client_id", mqClientId)
                 .apply();
     }
 
@@ -94,8 +100,13 @@ public class FlutterBackgroundServicePlugin extends BroadcastReceiver implements
                 long callbackHandle = arg.getLong("handle");
                 boolean isForeground = arg.getBoolean("is_foreground_mode");
                 boolean autoStartOnBoot = arg.getBoolean("auto_start_on_boot");
-
-                configure(context, callbackHandle, isForeground, autoStartOnBoot);
+                String serverHost = arg.getString("mq_server_host");
+                String clientId = arg.getString("mq_client_id");
+                int serverPort = arg.getInt("mq_port");
+                String username = arg.getString("mq_username");
+                String password = arg.getString("mq_password");
+                configure(context, callbackHandle, isForeground, autoStartOnBoot,serverHost,serverPort,
+                        username,password,clientId);
                 if (autoStartOnBoot) {
                     start();
                 }

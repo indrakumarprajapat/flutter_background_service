@@ -30,6 +30,12 @@ class AndroidConfiguration {
   /// must be a top level or static method
   final Function onStart;
 
+  ///
+  final Function? onMqConnected;
+
+  ///
+  final Function? onMqDisconnected;
+
   /// wheter service can started automatically on boot and after configure
   final bool autoStart;
 
@@ -39,12 +45,25 @@ class AndroidConfiguration {
   final String? foregroundServiceNotificationTitle;
   final String? foregroundServiceNotificationContent;
 
+  final String mqServerHost;
+  final String mqUsername;
+  final String mqPassword;
+  final int mqServerPort;
+  final String mqClientId;
+
   AndroidConfiguration({
     required this.onStart,
+    this.onMqConnected,
+    this.onMqDisconnected,
     this.autoStart = true,
     required this.isForegroundMode,
     this.foregroundServiceNotificationContent,
     this.foregroundServiceNotificationTitle,
+    required this.mqServerHost,
+    required this.mqUsername,
+    required this.mqPassword,
+    required this.mqServerPort,
+    required this.mqClientId
   });
 }
 
@@ -113,6 +132,11 @@ class FlutterBackgroundService {
           "handle": handle.toRawHandle(),
           "is_foreground_mode": androidConfiguration.isForegroundMode,
           "auto_start_on_boot": androidConfiguration.autoStart,
+          "mq_server_host": androidConfiguration.mqServerHost,
+          "mq_port": androidConfiguration.mqServerPort,
+          "mq_username": androidConfiguration.mqUsername,
+          "mq_password": androidConfiguration.mqPassword,
+          "mq_client_id": androidConfiguration.mqClientId,
         },
       );
 

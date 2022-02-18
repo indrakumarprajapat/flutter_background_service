@@ -36,6 +36,11 @@ Future<void> initializeService() async {
       // auto start service
       autoStart: true,
       isForegroundMode: true,
+      mqServerHost: '',
+      mqUsername: '',
+      mqPassword: '',
+      mqServerPort: 1883,
+      mqClientId: '',
     ),
     iosConfiguration: IosConfiguration(
       // auto start service

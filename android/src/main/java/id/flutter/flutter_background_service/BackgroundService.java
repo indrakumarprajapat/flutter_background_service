@@ -127,6 +127,38 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
         SharedPreferences pref = context.getSharedPreferences("id.flutter.background_service", MODE_PRIVATE);
         return pref.getBoolean("is_manually_stopped", false);
     }
+    public void setMqServerCredentials(String host,String username, String password) {
+        SharedPreferences pref = getSharedPreferences("id.flutter.background_service", MODE_PRIVATE);
+        pref.edit().putString("mq_server_host", host).apply();
+    }
+    public void setMqUsername(String host,String username, String password) {
+        SharedPreferences pref = getSharedPreferences("id.flutter.background_service", MODE_PRIVATE);
+        pref.edit().putString("mq_username", username).apply();
+    }
+    public void setMqPassword(String host,String username, String password) {
+        SharedPreferences pref = getSharedPreferences("id.flutter.background_service", MODE_PRIVATE);
+        pref.edit().putString("mq_password", password).apply();
+    }
+    public static String getMqServerHost(Context context) {
+        SharedPreferences pref = context.getSharedPreferences("id.flutter.background_service", MODE_PRIVATE);
+        return pref.getString("mq_server_host", "");
+    }
+    public static String getMqClientId(Context context) {
+        SharedPreferences pref = context.getSharedPreferences("id.flutter.background_service", MODE_PRIVATE);
+        return pref.getString("mq_client_id", "");
+    }
+    public static int getMqPort(Context context) {
+        SharedPreferences pref = context.getSharedPreferences("id.flutter.background_service", MODE_PRIVATE);
+        return pref.getInt("mq_port", 1883);
+    }
+    public static String getMqUsername(Context context) {
+        SharedPreferences pref = context.getSharedPreferences("id.flutter.background_service", MODE_PRIVATE);
+        return pref.getString("mq_username", "");
+    }
+    public static String getMqPassword(Context context) {
+        SharedPreferences pref = context.getSharedPreferences("id.flutter.background_service", MODE_PRIVATE);
+        return pref.getString("mq_password", "");
+    }
 
     @RequiresApi(api = Build.VERSION_CODES.LOLLIPOP)
     @Override
@@ -271,10 +303,13 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
 
     private void initializeConnection() {
         if (hive_client == null) {
+            String serverHost = BackgroundService.getMqServerHost(this);
+            int serverPort = BackgroundService.getMqPort(this);
+            String clientId = BackgroundService.getMqClientId(this);
             hive_client = Mqtt3Client.builder()
-                    .identifier(UUID.randomUUID().toString())
-                    .serverHost("blithesome-waiter.cloudmqtt.com")
-                    .serverPort(1883)
+                    .identifier(clientId)
+                    .serverHost(serverHost)
+                    .serverPort(serverPort)
                     .addConnectedListener(context -> {
                         Log.d(">>> Connected ", context.toString());
                         if (connectTimer != null) {
@@ -303,10 +338,12 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
 
     private void connectMqtt() {
         if (hive_client != null && !hive_client.getState().isConnected()) {
+            String username = BackgroundService.getMqUsername(this);
+            String password = BackgroundService.getMqPassword(this);
             hive_client.toAsync().connectWith()
                     .simpleAuth()
-                    .username("boomdriver")
-                    .password("boom@123456".getBytes())
+                    .username(username)
+                    .password(password.getBytes())
                     .applySimpleAuth()
                     .keepAlive(10)
                     .send();
