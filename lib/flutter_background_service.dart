@@ -45,6 +45,9 @@ class AndroidConfiguration {
   final String? foregroundServiceNotificationTitle;
   final String? foregroundServiceNotificationContent;
 
+  /// wheter service is foreground or background mode
+  final bool isServiceStart;
+
   final String mqServerHost;
   final String mqUsername;
   final String mqPassword;
@@ -56,6 +59,7 @@ class AndroidConfiguration {
     this.onMqConnected,
     this.onMqDisconnected,
     this.autoStart = true,
+    this.isServiceStart = false,
     required this.isForegroundMode,
     this.foregroundServiceNotificationContent,
     this.foregroundServiceNotificationTitle,
@@ -100,7 +104,6 @@ class FlutterBackgroundService {
         break;
       default:
     }
-
     return true;
   }
 
@@ -131,6 +134,7 @@ class FlutterBackgroundService {
         {
           "handle": handle.toRawHandle(),
           "is_foreground_mode": androidConfiguration.isForegroundMode,
+          "is_service_start": androidConfiguration.isServiceStart,
           "auto_start_on_boot": androidConfiguration.autoStart,
           "mq_server_host": androidConfiguration.mqServerHost,
           "mq_port": androidConfiguration.mqServerPort,
@@ -189,9 +193,60 @@ class FlutterBackgroundService {
     }
 
     _backgroundChannel.invokeMethod("sendData", data);
-
   }
 
+  // Send data from UI to Service, or from Service to UI
+  void mqPublishMessage(String topic,String payload) async {
+    if (!(await (isServiceRunning()))) {
+      dispose();
+      return;
+    }
+    if (_isFromInitialization) {
+      _mainChannel.invokeMethod("mqPublishMessage", {
+        "topic": topic,
+        "payload": payload,
+      });
+      return;
+    }
+    _backgroundChannel.invokeMethod("mqPublishMessage", {
+      "topic": topic,
+      "payload": payload,
+    });
+  }
+
+  // Send data from UI to Service, or from Service to UI
+  void mqSubscribeTopic(String topic) async {
+    if (!(await (isServiceRunning()))) {
+      dispose();
+      return;
+    }
+    if (_isFromInitialization) {
+      _mainChannel.invokeMethod("mqSubscribeTopic", {
+        "topic": topic
+      });
+      return;
+    }
+    _backgroundChannel.invokeMethod("mqSubscribeTopic", {
+      "topic": topic
+    });
+  }
+
+  // Send data from UI to Service, or from Service to UI
+  void mqUnSubscribeTopic(String topic) async {
+    if (!(await (isServiceRunning()))) {
+      dispose();
+      return;
+    }
+    if (_isFromInitialization) {
+      _mainChannel.invokeMethod("mqUnSubscribeTopic", {
+        "topic": topic
+      });
+      return;
+    }
+    _backgroundChannel.invokeMethod("mqUnSubscribeTopic", {
+      "topic": topic
+    });
+  }
 
   // Set Foreground Notification Information
   // Only available when foreground mode is true
@@ -208,6 +263,13 @@ class FlutterBackgroundService {
   void setForegroundMode(bool value) {
     if (Platform.isAndroid)
       _backgroundChannel.invokeMethod("setForegroundMode", {"value": value,});
+  }
+
+  // Set Foreground Mode
+  // Only for Android
+  void setIsServiceStart(bool value) {
+    if (Platform.isAndroid)
+      _backgroundChannel.invokeMethod("setIsServiceStart", {"value": value,});
   }
 
   Future<bool> isServiceRunning() async {

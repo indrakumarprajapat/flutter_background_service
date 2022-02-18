@@ -63,12 +63,13 @@ public class FlutterBackgroundServicePlugin extends BroadcastReceiver implements
     }
 
 
-    private static void configure(Context context, long callbackHandleId, boolean isForeground, boolean autoStartOnBoot,
+    private static void configure(Context context, long callbackHandleId, boolean isForeground, boolean isServiceStart, boolean autoStartOnBoot,
                                   String mqServerHost,int mqPort, String mqUsername, String mqPassword,String mqClientId) {
         SharedPreferences pref = context.getSharedPreferences("id.flutter.background_service", MODE_PRIVATE);
         pref.edit()
                 .putLong("callback_handle", callbackHandleId)
                 .putBoolean("is_foreground", isForeground)
+                .putBoolean("is_service_start", isServiceStart)
                 .putBoolean("auto_start_on_boot", autoStartOnBoot)
                 .putString("mq_server_host", mqServerHost)
                 .putInt("mq_port", mqPort)
@@ -99,15 +100,16 @@ public class FlutterBackgroundServicePlugin extends BroadcastReceiver implements
             if ("configure".equals(method)) {
                 long callbackHandle = arg.getLong("handle");
                 boolean isForeground = arg.getBoolean("is_foreground_mode");
+                boolean isServiceStart = arg.getBoolean("is_service_start");
                 boolean autoStartOnBoot = arg.getBoolean("auto_start_on_boot");
                 String serverHost = arg.getString("mq_server_host");
                 String clientId = arg.getString("mq_client_id");
                 int serverPort = arg.getInt("mq_port");
                 String username = arg.getString("mq_username");
                 String password = arg.getString("mq_password");
-                configure(context, callbackHandle, isForeground, autoStartOnBoot,serverHost,serverPort,
+                configure(context, callbackHandle, isForeground,isServiceStart, autoStartOnBoot,serverHost,serverPort,
                         username,password,clientId);
-                if (autoStartOnBoot) {
+                if (autoStartOnBoot && isServiceStart) {
                     start();
                 }
 
@@ -140,11 +142,39 @@ public class FlutterBackgroundServicePlugin extends BroadcastReceiver implements
                         break;
                     }
                 }
-
                 result.success(true);
                 return;
             }
-
+            if (method.equalsIgnoreCase("mqPublishMessage")) {
+                for (FlutterBackgroundServicePlugin plugin : _instances) {
+                    if (plugin.service != null) {
+                        plugin.service.receiveData((JSONObject) call.arguments);
+                        break;
+                    }
+                }
+                result.success(true);
+                return;
+            }
+            if (method.equalsIgnoreCase("mqSubscribeTopic")) {
+                for (FlutterBackgroundServicePlugin plugin : _instances) {
+                    if (plugin.service != null) {
+                        plugin.service.receiveData((JSONObject) call.arguments);
+                        break;
+                    }
+                }
+                result.success(true);
+                return;
+            }
+            if (method.equalsIgnoreCase("mqUnSubscribeTopic")) {
+                for (FlutterBackgroundServicePlugin plugin : _instances) {
+                    if (plugin.service != null) {
+                        plugin.service.receiveData((JSONObject) call.arguments);
+                        break;
+                    }
+                }
+                result.success(true);
+                return;
+            }
             if (method.equalsIgnoreCase("isServiceRunning")) {
                 ActivityManager manager = (ActivityManager) context.getSystemService(Context.ACTIVITY_SERVICE);
                 for (ActivityManager.RunningServiceInfo service : manager.getRunningServices(Integer.MAX_VALUE)) {

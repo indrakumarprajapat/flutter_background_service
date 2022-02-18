@@ -15,7 +15,8 @@ public class BootReceiver extends BroadcastReceiver {
     public void onReceive(Context context, Intent intent) {
         SharedPreferences pref = context.getSharedPreferences("id.flutter.background_service", MODE_PRIVATE);
         boolean autoStart = pref.getBoolean("auto_start_on_boot",true);
-        if(autoStart) {
+        boolean isServiceStart = pref.getBoolean("is_service_start",false);
+        if(autoStart && isServiceStart) {
             if (BackgroundService.isForegroundService(context)){
                 ContextCompat.startForegroundService(context, new Intent(context, BackgroundService.class));
             } else {

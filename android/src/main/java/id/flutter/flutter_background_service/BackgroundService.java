@@ -117,6 +117,15 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
         SharedPreferences pref = context.getSharedPreferences("id.flutter.background_service", MODE_PRIVATE);
         return pref.getBoolean("is_foreground", true);
     }
+    public void setIsServiceStart(boolean value) {
+        SharedPreferences pref = getSharedPreferences("id.flutter.background_service", MODE_PRIVATE);
+        pref.edit().putBoolean("is_service_start", value).apply();
+    }
+
+    public static boolean isServiceStart(Context context) {
+        SharedPreferences pref = context.getSharedPreferences("id.flutter.background_service", MODE_PRIVATE);
+        return pref.getBoolean("is_service_start", true);
+    }
 
     public void setManuallyStopped(boolean value) {
         SharedPreferences pref = getSharedPreferences("id.flutter.background_service", MODE_PRIVATE);
@@ -458,6 +467,19 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
                 return;
             }
 
+            if (method.equalsIgnoreCase("setIsServiceStart")) {
+                JSONObject arg = (JSONObject) call.arguments;
+                boolean value = arg.getBoolean("value");
+                setIsServiceStart(value);
+                if (value) {
+                    // true
+                } else {
+                    // false
+                }
+                result.success(true);
+                return;
+            }
+
             if (method.equalsIgnoreCase("stopService")) {
                 isManuallyStopped = true;
                 Intent intent = new Intent(this, WatchdogReceiver.class);
@@ -476,14 +498,12 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
             }
 
             if (method.equalsIgnoreCase("sendData")) {
-
                 LocalBroadcastManager manager = LocalBroadcastManager.getInstance(this);
                 Intent intent = new Intent("id.flutter/background_service");
                 intent.putExtra("data", ((JSONObject) call.arguments).toString());
                 manager.sendBroadcast(intent);
                 result.success(true);
                 return;
-
             }
 
             if (method.equalsIgnoreCase("mqPublishMessage")) {
