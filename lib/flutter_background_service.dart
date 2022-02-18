@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:async';
 import 'dart:io';
 import 'dart:ui';
 
@@ -47,19 +48,14 @@ class AndroidConfiguration {
   });
 }
 
+
 class FlutterBackgroundService {
   bool _isFromInitialization = false;
   bool _isRunning = false;
   bool _isMainChannel = false;
-  static const MethodChannel _backgroundChannel = const MethodChannel(
-    'id.flutter/background_service_bg',
-    JSONMethodCodec(),
-  );
-
-  static const MethodChannel _mainChannel = const MethodChannel(
-    'id.flutter/background_service',
-    JSONMethodCodec(),
-  );
+  static const MethodChannel _backgroundChannel = const MethodChannel('id.flutter/background_service_bg', JSONMethodCodec(),);
+  static const MethodChannel _mainChannel = const MethodChannel('id.flutter/background_service', JSONMethodCodec(),);
+  static const EventChannel _eventChannel = const EventChannel('id.flutter/background_service_bg_event', JSONMethodCodec(),);
 
   static FlutterBackgroundService _instance =
       FlutterBackgroundService._internal().._setupBackground();
@@ -81,8 +77,7 @@ class FlutterBackgroundService {
 
   Future<dynamic> _handle(MethodCall call) async {
     switch (call.method) {
-      case "onReceiveData":
-        _streamController.sink.add(call.arguments);
+      case "onReceiveData":_streamController.sink.add(call.arguments);
         break;
       default:
     }
@@ -102,11 +97,10 @@ class FlutterBackgroundService {
 
   Future<bool> configure({
     required IosConfiguration iosConfiguration,
-    required AndroidConfiguration androidConfiguration,
-  }) async {
+    required AndroidConfiguration androidConfiguration,}) async {
+
     if (Platform.isAndroid) {
-      final CallbackHandle? handle =
-          PluginUtilities.getCallbackHandle(androidConfiguration.onStart);
+      final CallbackHandle? handle = PluginUtilities.getCallbackHandle(androidConfiguration.onStart);
       if (handle == null) {
         return false;
       }
@@ -156,8 +150,10 @@ class FlutterBackgroundService {
     return false;
   }
 
+
   // Send data from UI to Service, or from Service to UI
   void sendData(Map<String, dynamic> data) async {
+
     if (!(await (isServiceRunning()))) {
       dispose();
       return;
@@ -169,7 +165,9 @@ class FlutterBackgroundService {
     }
 
     _backgroundChannel.invokeMethod("sendData", data);
+
   }
+
 
   // Set Foreground Notification Information
   // Only available when foreground mode is true
@@ -185,9 +183,7 @@ class FlutterBackgroundService {
   // Only for Android
   void setForegroundMode(bool value) {
     if (Platform.isAndroid)
-      _backgroundChannel.invokeMethod("setForegroundMode", {
-        "value": value,
-      });
+      _backgroundChannel.invokeMethod("setForegroundMode", {"value": value,});
   }
 
   Future<bool> isServiceRunning() async {
@@ -212,12 +208,15 @@ class FlutterBackgroundService {
       });
   }
 
-  StreamController<Map<String, dynamic>?> _streamController =
-      StreamController.broadcast();
 
+  StreamController<Map<String, dynamic>?> _streamController = StreamController.broadcast();
   Stream<Map<String, dynamic>?> get onDataReceived => _streamController.stream;
 
   void dispose() {
     _streamController.close();
   }
+
+  Stream<Map<String, dynamic>?> get onDataMqttReceived => _eventChannel.receiveBroadcastStream().map<Map<String, dynamic>?>((value)=>value);
+
+
 }
