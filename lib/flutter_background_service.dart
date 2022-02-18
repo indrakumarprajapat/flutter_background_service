@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:async';
 import 'dart:io';
 import 'dart:ui';
 
@@ -54,6 +55,7 @@ class FlutterBackgroundService {
   bool _isMainChannel = false;
   static const MethodChannel _backgroundChannel = const MethodChannel('id.flutter/background_service_bg', JSONMethodCodec(),);
   static const MethodChannel _mainChannel = const MethodChannel('id.flutter/background_service', JSONMethodCodec(),);
+  static const EventChannel _eventChannel = const EventChannel('id.flutter/background_service_bg_event', JSONMethodCodec(),);
 
   static FlutterBackgroundService _instance =
       FlutterBackgroundService._internal().._setupBackground();
@@ -98,8 +100,7 @@ class FlutterBackgroundService {
     required AndroidConfiguration androidConfiguration,}) async {
 
     if (Platform.isAndroid) {
-      final CallbackHandle? handle =
-          PluginUtilities.getCallbackHandle(androidConfiguration.onStart);
+      final CallbackHandle? handle = PluginUtilities.getCallbackHandle(androidConfiguration.onStart);
       if (handle == null) {
         return false;
       }
@@ -149,6 +150,7 @@ class FlutterBackgroundService {
     return false;
   }
 
+
   // Send data from UI to Service, or from Service to UI
   void sendData(Map<String, dynamic> data) async {
 
@@ -166,20 +168,6 @@ class FlutterBackgroundService {
 
   }
 
-
-  // Send data from UI to Service, or from Service to UI
-  void mqttSendData(Map<String, dynamic> data) async {
-    if (!(await (isServiceRunning()))) {
-      dispose();
-      return;
-    }
-
-    if (_isFromInitialization) {
-      _mainChannel.invokeMethod("mqttSendData", data);
-      return;
-    }
-    _backgroundChannel.invokeMethod("mqttSendData", data);
-  }
 
   // Set Foreground Notification Information
   // Only available when foreground mode is true
@@ -220,10 +208,15 @@ class FlutterBackgroundService {
       });
   }
 
+
   StreamController<Map<String, dynamic>?> _streamController = StreamController.broadcast();
   Stream<Map<String, dynamic>?> get onDataReceived => _streamController.stream;
 
   void dispose() {
     _streamController.close();
   }
+
+  Stream<Map<String, dynamic>?> get onDataMqttReceived => _eventChannel.receiveBroadcastStream().map<Map<String, dynamic>?>((value)=>value);
+
+
 }

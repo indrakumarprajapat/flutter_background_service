@@ -23,6 +23,7 @@ import java.util.List;
 import io.flutter.embedding.engine.plugins.FlutterPlugin;
 import io.flutter.embedding.engine.plugins.service.ServiceAware;
 import io.flutter.embedding.engine.plugins.service.ServicePluginBinding;
+import io.flutter.plugin.common.EventChannel;
 import io.flutter.plugin.common.MethodCall;
 import io.flutter.plugin.common.MethodChannel;
 import io.flutter.plugin.common.MethodChannel.MethodCallHandler;
@@ -33,7 +34,7 @@ import io.flutter.plugin.common.JSONMethodCodec;
 /**
  * FlutterBackgroundServicePlugin
  */
-public class FlutterBackgroundServicePlugin extends BroadcastReceiver implements FlutterPlugin, MethodCallHandler, ServiceAware {
+public class FlutterBackgroundServicePlugin extends BroadcastReceiver implements FlutterPlugin, MethodCallHandler, ServiceAware, EventChannel.StreamHandler{
     private static final String TAG = "BackgroundServicePlugin";
     private static final List<FlutterBackgroundServicePlugin> _instances = new ArrayList<>();
 
@@ -44,6 +45,8 @@ public class FlutterBackgroundServicePlugin extends BroadcastReceiver implements
     private MethodChannel channel;
     private Context context;
     private BackgroundService service;
+    private EventChannel eventChannel;
+    private EventChannel.EventSink mqttResponse;
 
     @Override
     public void onAttachedToEngine(@NonNull FlutterPluginBinding flutterPluginBinding) {
@@ -53,17 +56,12 @@ public class FlutterBackgroundServicePlugin extends BroadcastReceiver implements
 
         channel = new MethodChannel(flutterPluginBinding.getBinaryMessenger(), "id.flutter/background_service", JSONMethodCodec.INSTANCE);
         channel.setMethodCallHandler(this);
+
+        eventChannel = new EventChannel(flutterPluginBinding.getBinaryMessenger(), "id.flutter/background_service_bg_event", JSONMethodCodec.INSTANCE);
+        eventChannel.setStreamHandler(this);
+
     }
 
-    public static void registerWith(Registrar registrar) {
-        LocalBroadcastManager localBroadcastManager = LocalBroadcastManager.getInstance(registrar.context());
-        final FlutterBackgroundServicePlugin plugin = new FlutterBackgroundServicePlugin();
-        localBroadcastManager.registerReceiver(plugin, new IntentFilter("id.flutter/background_service"));
-
-        final MethodChannel channel = new MethodChannel(registrar.messenger(), "id.flutter/background_service", JSONMethodCodec.INSTANCE);
-        channel.setMethodCallHandler(plugin);
-        plugin.channel = channel;
-    }
 
     private static void configure(Context context, long callbackHandleId, boolean isForeground, boolean autoStartOnBoot) {
         SharedPreferences pref = context.getSharedPreferences("id.flutter.background_service", MODE_PRIVATE);
@@ -157,7 +155,7 @@ public class FlutterBackgroundServicePlugin extends BroadcastReceiver implements
     @Override
     public void onDetachedFromEngine(@NonNull FlutterPluginBinding binding) {
         channel.setMethodCallHandler(null);
-
+        eventChannel.setStreamHandler(null);
         LocalBroadcastManager localBroadcastManager = LocalBroadcastManager.getInstance(this.context);
         localBroadcastManager.unregisterReceiver(this);
     }
@@ -173,18 +171,26 @@ public class FlutterBackgroundServicePlugin extends BroadcastReceiver implements
                 if (channel != null) {
                     channel.invokeMethod("onReceiveData", jData);
                 }
+
+                if ("mqttResponse".equals(jData.getString("data"))) {
+                    if (eventChannel != null && mqttResponse != null) {
+                        mqttResponse.success(jData);
+                    }
+                }
+
             } catch (JSONException e) {
                 e.printStackTrace();
             } catch (Exception e) {
                 e.printStackTrace();
             }
+
+
         }
     }
 
     @Override
     public void onAttachedToService(@NonNull ServicePluginBinding binding) {
         Log.d(TAG, "onAttachedToService");
-
         this.service = (BackgroundService) binding.getService();
     }
 
@@ -192,5 +198,17 @@ public class FlutterBackgroundServicePlugin extends BroadcastReceiver implements
     public void onDetachedFromService() {
         this.service = null;
         Log.d(TAG, "onDetachedFromService");
+    }
+
+
+
+    @Override
+    public void onListen(Object arguments, EventChannel.EventSink events) {
+        mqttResponse = events;
+    }
+
+    @Override
+    public void onCancel(Object arguments) {
+
     }
 }

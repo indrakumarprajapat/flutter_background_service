@@ -10,10 +10,13 @@ import android.app.Service;
 import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
+import android.media.MediaPlayer;
+import android.media.Ringtone;
+import android.media.RingtoneManager;
 import android.net.ConnectivityManager;
 import android.net.Network;
 import android.net.NetworkCapabilities;
-import android.net.NetworkRequest;
+import android.net.Uri;
 import android.os.Build;
 import android.os.IBinder;
 import android.os.PowerManager;
@@ -53,13 +56,14 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
     private static final String TAG = "BackgroundService";
     private FlutterEngine backgroundEngine;
     private MethodChannel methodChannel;
+
     private DartExecutor.DartCallback dartCallback;
     private boolean isManuallyStopped = false;
     Mqtt3AsyncClient hive_client;
 
-
     String notificationTitle = "Background Service";
     String notificationContent = "Running";
+
     private static final String LOCK_NAME = BackgroundService.class.getName() + ".Lock";
     private static volatile WakeLock lockStatic = null; // notice static
 
@@ -168,6 +172,7 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
         }
     }
 
+
     protected void updateNotificationInfo() {
         if (isForegroundService(this)) {
 
@@ -186,10 +191,52 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
                     .setAutoCancel(true)
                     .setOngoing(true)
                     .setContentTitle(notificationTitle)
-                    .setContentText(notificationContent)
+                    .setContentText("only notificaiton")
                     .setContentIntent(pi);
 
             startForeground(99778, mBuilder.build());
+        }
+    }
+
+    protected void newBookingNotification() {
+        if (isForegroundService(this)) {
+            String packageName = getApplicationContext().getPackageName();
+            Intent i = getPackageManager().getLaunchIntentForPackage(packageName);
+            PendingIntent pi;
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                pi = PendingIntent.getActivity(BackgroundService.this, 99778, i, PendingIntent.FLAG_CANCEL_CURRENT | PendingIntent.FLAG_MUTABLE);
+            } else {
+                pi = PendingIntent.getActivity(BackgroundService.this, 99778, i, PendingIntent.FLAG_CANCEL_CURRENT);
+            }
+
+            NotificationCompat.Builder mBuilder = new NotificationCompat.Builder(this, "FOREGROUND_DEFAULT")
+                    .setSmallIcon(R.drawable.ic_bg_service_small)
+                    .setAutoCancel(true)
+                    .setOngoing(true)
+                    .setContentTitle(notificationTitle)
+                    .setContentText("this is new sound notificaiton")
+                    .setContentIntent(pi);
+
+            startForeground(99778, mBuilder.build());
+
+
+           MediaPlayer mediaPlayer = MediaPlayer.create(this, R.raw.booking);
+            try {
+                if (mediaPlayer != null) {//check if it's been already initialized.
+                    MediaPlayer finalMediaPlayer = mediaPlayer;
+                    new Timer().schedule(new TimerTask() {
+                        @Override
+                        public void run() {
+                            finalMediaPlayer.start(); //start play t
+                        }
+                    }, 0);
+                }
+            } catch (Exception ex) {
+                if (mediaPlayer != null) {
+                    mediaPlayer.release();
+                    mediaPlayer = null;
+                }
+            }
         }
     }
 
@@ -208,17 +255,17 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
         return START_STICKY;
     }
 
-    @RequiresApi(api = Build.VERSION_CODES.LOLLIPOP)
-    private void monitorNetwork() {
-        NetworkRequest networkRequest = new NetworkRequest.Builder()
-                .addCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
-                .addTransportType(NetworkCapabilities.TRANSPORT_WIFI)
-                .addTransportType(NetworkCapabilities.TRANSPORT_CELLULAR)
-                .build();
-
-        ConnectivityManager connectivityManager = (ConnectivityManager) this.getSystemService(this.CONNECTIVITY_SERVICE);
-        connectivityManager.requestNetwork(networkRequest, networkCallback);
-    }
+//    @RequiresApi(api = Build.VERSION_CODES.LOLLIPOP)
+//    private void monitorNetwork() {
+//        NetworkRequest networkRequest = new NetworkRequest.Builder()
+//                .addCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
+//                .addTransportType(NetworkCapabilities.TRANSPORT_WIFI)
+//                .addTransportType(NetworkCapabilities.TRANSPORT_CELLULAR)
+//                .build();
+//
+//        ConnectivityManager connectivityManager = (ConnectivityManager) this.getSystemService(this.CONNECTIVITY_SERVICE);
+//        connectivityManager.requestNetwork(networkRequest, networkCallback);
+//    }
 
 
     AtomicBoolean isRunning = new AtomicBoolean(false);
@@ -229,7 +276,6 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
             Log.d(TAG, "runService");
             if (isRunning.get() || (backgroundEngine != null && !backgroundEngine.getDartExecutor().isExecutingDart()))
                 return;
-            updateNotificationInfo();
 
             SharedPreferences pref = getSharedPreferences("id.flutter.background_service", MODE_PRIVATE);
             long callbackHandle = pref.getLong("callback_handle", 0);
@@ -246,13 +292,13 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
             backgroundEngine = new FlutterEngine(this);
             backgroundEngine.getServiceControlSurface().attachToService(BackgroundService.this, null, isForegroundService(this));
 
-            methodChannel = new MethodChannel(backgroundEngine.getDartExecutor().getBinaryMessenger(), "id.flutter/background_service_bg",
-                    JSONMethodCodec.INSTANCE);
+            methodChannel = new MethodChannel(backgroundEngine.getDartExecutor().getBinaryMessenger(), "id.flutter/background_service_bg", JSONMethodCodec.INSTANCE);
             methodChannel.setMethodCallHandler(this);
 
             dartCallback = new DartExecutor.DartCallback(getAssets(), FlutterInjector.instance().flutterLoader().findAppBundlePath(), callback);
             backgroundEngine.getDartExecutor().executeDartCallback(dartCallback);
 
+            updateNotificationInfo();
 
         } catch (UnsatisfiedLinkError e) {
             notificationContent = "Error " + e.getMessage();
@@ -276,7 +322,7 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
                             connectTimer.cancel();
                             connectTimer = null;
                         }
-                        this.subscribeTopic("testb");
+                        this.subscribeTopic("testc");
                         handleSubscriptionResponse();
                     }).addDisconnectedListener(context -> {
                         Log.d(">>> Disconnected ", context.toString());
@@ -316,18 +362,24 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
     void handleSubscriptionResponse() {
         hive_client.publishes(MqttGlobalPublishFilter.ALL,
                 mqtt3Publish -> {
+
+                    newBookingNotification();
+
                     Log.d(">>> G >>> ", mqtt3Publish.toString());
                     if (methodChannel != null) {
                         try {
+
                             String topic = mqtt3Publish.getTopic().toString();
                             String payload = new String(mqtt3Publish.getPayloadAsBytes());
                             JSONObject mqData = new JSONObject();
-                            mqData.put("topic",topic);
-                            mqData.put("payload",payload);
+                            mqData.put("data", "mqttResponse");
+                            mqData.put("topic", topic);
+                            mqData.put("payload", payload);
                             LocalBroadcastManager manager = LocalBroadcastManager.getInstance(this);
                             Intent intent = new Intent("id.flutter/background_service");
                             intent.putExtra("data", mqData.toString());
                             manager.sendBroadcast(intent);
+
                         } catch (Exception e) {
                             e.printStackTrace();
                         }
@@ -492,5 +544,6 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
             boolean hasWifi = networkCapabilities.hasTransport(NetworkCapabilities.TRANSPORT_WIFI);
         }
     };
+
 
 }
