@@ -11,13 +11,10 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.media.MediaPlayer;
-import android.media.Ringtone;
-import android.media.RingtoneManager;
 import android.net.ConnectivityManager;
 import android.net.Network;
 import android.net.NetworkCapabilities;
 import android.net.NetworkRequest;
-import android.net.Uri;
 import android.os.Build;
 import android.os.IBinder;
 import android.os.PowerManager;
@@ -41,7 +38,6 @@ import org.json.JSONObject;
 
 import java.util.Timer;
 import java.util.TimerTask;
-import java.util.UUID;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.lang.UnsatisfiedLinkError;
 
@@ -326,7 +322,7 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
                             connectTimer = null;
                         }
                         this.subscribeTopic("testc");
-                        onDataMqttReceived();
+                        onMqttConnected();
                         handleSubscriptionResponse();
                     }).addDisconnectedListener(context -> {
                         Log.d(">>> Disconnected ", context.toString());
@@ -346,7 +342,7 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
         }
     }
 
-    private void onDataMqttReceived(){
+    private void onMqttConnected(){
         try {
 
             JSONObject mqData = new JSONObject();
