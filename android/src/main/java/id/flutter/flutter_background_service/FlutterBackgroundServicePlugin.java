@@ -28,7 +28,6 @@ import io.flutter.plugin.common.MethodCall;
 import io.flutter.plugin.common.MethodChannel;
 import io.flutter.plugin.common.MethodChannel.MethodCallHandler;
 import io.flutter.plugin.common.MethodChannel.Result;
-import io.flutter.plugin.common.PluginRegistry.Registrar;
 import io.flutter.plugin.common.JSONMethodCodec;
 
 /**
@@ -218,6 +217,13 @@ public class FlutterBackgroundServicePlugin extends BroadcastReceiver implements
                         mqttResponse.success(jData);
                     }
                 }
+
+                if ("onMqConnected".equals(jData.getString("onMqConnectedValue"))) {
+                    if (eventChannel != null && mqttResponse != null) {
+                        mqttResponse.success(jData);
+                    }
+                }
+
 
             } catch (JSONException e) {
                 e.printStackTrace();

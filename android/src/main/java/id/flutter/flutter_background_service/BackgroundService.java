@@ -326,6 +326,7 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
                             connectTimer = null;
                         }
                         this.subscribeTopic("testc");
+                        onDataMqttReceived();
                         handleSubscriptionResponse();
                     }).addDisconnectedListener(context -> {
                         Log.d(">>> Disconnected ", context.toString());
@@ -342,6 +343,27 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
                     })
                     .buildAsync();
             connectMqtt();
+        }
+    }
+
+    private void onDataMqttReceived(){
+        try {
+
+            JSONObject mqData = new JSONObject();
+            mqData.put("onMqConnectedValue", "onMqConnected");
+
+            if (methodChannel != null) {
+                try {
+                    LocalBroadcastManager manager = LocalBroadcastManager.getInstance(this);
+                    Intent intent = new Intent("id.flutter/background_service");
+                    intent.putExtra("data", mqData.toString());
+                    manager.sendBroadcast(intent);
+                } catch (Exception e) {
+                    e.printStackTrace();
+                }
+            }
+        } catch (JSONException e) {
+            e.printStackTrace();
         }
     }
 
