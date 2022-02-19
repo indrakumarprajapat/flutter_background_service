@@ -344,10 +344,8 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
 
     private void onMqttConnected(){
         try {
-
             JSONObject mqData = new JSONObject();
-            mqData.put("onMqConnectedValue", "onMqConnected");
-
+            mqData.put("onMqConnected", "connected");
             if (methodChannel != null) {
                 try {
                     LocalBroadcastManager manager = LocalBroadcastManager.getInstance(this);

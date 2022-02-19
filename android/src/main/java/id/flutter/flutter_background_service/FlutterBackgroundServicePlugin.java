@@ -33,7 +33,7 @@ import io.flutter.plugin.common.JSONMethodCodec;
 /**
  * FlutterBackgroundServicePlugin
  */
-public class FlutterBackgroundServicePlugin extends BroadcastReceiver implements FlutterPlugin, MethodCallHandler, ServiceAware, EventChannel.StreamHandler{
+public class FlutterBackgroundServicePlugin extends BroadcastReceiver implements FlutterPlugin, MethodCallHandler, ServiceAware, EventChannel.StreamHandler {
     private static final String TAG = "BackgroundServicePlugin";
     private static final List<FlutterBackgroundServicePlugin> _instances = new ArrayList<>();
 
@@ -45,7 +45,7 @@ public class FlutterBackgroundServicePlugin extends BroadcastReceiver implements
     private Context context;
     private BackgroundService service;
     private EventChannel eventChannel;
-    private EventChannel.EventSink mqttResponse;
+    private EventChannel.EventSink mqttResponseEventSink;
 
     @Override
     public void onAttachedToEngine(@NonNull FlutterPluginBinding flutterPluginBinding) {
@@ -63,7 +63,7 @@ public class FlutterBackgroundServicePlugin extends BroadcastReceiver implements
 
 
     private static void configure(Context context, long callbackHandleId, boolean isForeground, boolean isServiceStart, boolean autoStartOnBoot,
-                                  String mqServerHost,int mqPort, String mqUsername, String mqPassword,String mqClientId) {
+                                  String mqServerHost, int mqPort, String mqUsername, String mqPassword, String mqClientId) {
         SharedPreferences pref = context.getSharedPreferences("id.flutter.background_service", MODE_PRIVATE);
         pref.edit()
                 .putLong("callback_handle", callbackHandleId)
@@ -106,8 +106,8 @@ public class FlutterBackgroundServicePlugin extends BroadcastReceiver implements
                 int serverPort = arg.getInt("mq_port");
                 String username = arg.getString("mq_username");
                 String password = arg.getString("mq_password");
-                configure(context, callbackHandle, isForeground,isServiceStart, autoStartOnBoot,serverHost,serverPort,
-                        username,password,clientId);
+                configure(context, callbackHandle, isForeground, isServiceStart, autoStartOnBoot, serverHost, serverPort,
+                        username, password, clientId);
                 if (autoStartOnBoot && isServiceStart) {
                     start();
                 }
@@ -211,27 +211,30 @@ public class FlutterBackgroundServicePlugin extends BroadcastReceiver implements
                 if (channel != null) {
                     channel.invokeMethod("onReceiveData", jData);
                 }
-
-                if ("mqttResponse".equals(jData.getString("mqdata"))) {
-                    if (eventChannel != null && mqttResponse != null) {
-                        mqttResponse.success(jData);
+                try {
+                    if (jData.has("mqdata") && "mqttResponse".equals(jData.getString("mqdata"))) {
+                        if (eventChannel != null && mqttResponseEventSink != null) {
+                            mqttResponseEventSink.success(jData);
+                        }
                     }
+                } catch (Exception e) {
+                    e.printStackTrace();
                 }
-
-                if ("onMqConnected".equals(jData.getString("onMqConnectedValue"))) {
-                    if (eventChannel != null && mqttResponse != null) {
-                        mqttResponse.success(jData);
+                try {
+                    if (jData.has("onMqConnected") && "connected".equals(jData.getString("onMqConnected"))) {
+                        if (eventChannel != null && mqttResponseEventSink != null) {
+                            mqttResponseEventSink.success(jData);
+                        }
                     }
+                } catch (Exception e) {
+                    e.printStackTrace();
                 }
-
 
             } catch (JSONException e) {
                 e.printStackTrace();
             } catch (Exception e) {
                 e.printStackTrace();
             }
-
-
         }
     }
 
@@ -248,10 +251,9 @@ public class FlutterBackgroundServicePlugin extends BroadcastReceiver implements
     }
 
 
-
     @Override
     public void onListen(Object arguments, EventChannel.EventSink events) {
-        mqttResponse = events;
+        mqttResponseEventSink = events;
     }
 
     @Override
