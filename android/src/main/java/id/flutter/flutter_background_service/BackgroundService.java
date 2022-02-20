@@ -245,7 +245,7 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
         initializeConnection();
 
         getLock(getApplicationContext()).acquire();
-        monitorNetwork();
+//        monitorNetwork();
         return START_STICKY;
     }
 
