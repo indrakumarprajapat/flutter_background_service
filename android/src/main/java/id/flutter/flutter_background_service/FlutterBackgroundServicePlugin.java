@@ -34,7 +34,7 @@ import io.flutter.plugin.common.JSONMethodCodec;
  * FlutterBackgroundServicePlugin
  */
 public class FlutterBackgroundServicePlugin extends BroadcastReceiver implements FlutterPlugin, MethodCallHandler, ServiceAware, EventChannel.StreamHandler {
-    private static final String TAG = "BackgroundServicePlugin";
+    private static final String TAG = "BACKGROUNDSERVICEPLUGIN";
     private static final List<FlutterBackgroundServicePlugin> _instances = new ArrayList<>();
 
     public FlutterBackgroundServicePlugin() {
@@ -49,6 +49,8 @@ public class FlutterBackgroundServicePlugin extends BroadcastReceiver implements
 
     @Override
     public void onAttachedToEngine(@NonNull FlutterPluginBinding flutterPluginBinding) {
+        Log.d(TAG, "onAttachedToEngine() is called");
+
         this.context = flutterPluginBinding.getApplicationContext();
         LocalBroadcastManager localBroadcastManager = LocalBroadcastManager.getInstance(this.context);
         localBroadcastManager.registerReceiver(this, new IntentFilter("id.flutter/background_service"));
@@ -76,6 +78,8 @@ public class FlutterBackgroundServicePlugin extends BroadcastReceiver implements
                 .putString("mq_password", mqPassword)
                 .putString("mq_client_id", mqClientId)
                 .apply();
+        Log.d(TAG, "configure() is called from flutter bg plugin");
+
     }
 
     private void start() {
@@ -106,10 +110,12 @@ public class FlutterBackgroundServicePlugin extends BroadcastReceiver implements
                 int serverPort = arg.getInt("mq_port");
                 String username = arg.getString("mq_username");
                 String password = arg.getString("mq_password");
-                configure(context, callbackHandle, isForeground, isServiceStart, autoStartOnBoot, serverHost, serverPort,
-                        username, password, clientId);
+                configure(context, callbackHandle, isForeground, isServiceStart, autoStartOnBoot, serverHost, serverPort, username, password, clientId);
+
                 if (autoStartOnBoot && isServiceStart) {
                     start();
+                    Log.d(TAG, "onMethodCall >>> configure is called with >>> autoStartOnBoot && isServiceStart >>>");
+
                 }
 
                 result.success(true);
@@ -119,6 +125,8 @@ public class FlutterBackgroundServicePlugin extends BroadcastReceiver implements
             if ("start".equals(method)) {
                 start();
                 result.success(true);
+                Log.d(TAG, "onMethodCall >>> start is called");
+
                 return;
             }
 
@@ -126,6 +134,8 @@ public class FlutterBackgroundServicePlugin extends BroadcastReceiver implements
                 for (FlutterBackgroundServicePlugin plugin : _instances) {
                     if (plugin.service != null) {
                         plugin.service.receiveData((JSONObject) call.arguments);
+                        Log.d(TAG, "onMethodCall >>> mqttSendData is called with plugin.service not null ");
+
                         break;
                     }
                 }
@@ -138,6 +148,8 @@ public class FlutterBackgroundServicePlugin extends BroadcastReceiver implements
                 for (FlutterBackgroundServicePlugin plugin : _instances) {
                     if (plugin.service != null) {
                         plugin.service.receiveData((JSONObject) call.arguments);
+                        Log.d(TAG, "onMethodCall >>> sendData is called with plugin.service not null ");
+
                         break;
                     }
                 }
@@ -147,6 +159,8 @@ public class FlutterBackgroundServicePlugin extends BroadcastReceiver implements
             if (method.equalsIgnoreCase("mqPublishMessage")) {
                 for (FlutterBackgroundServicePlugin plugin : _instances) {
                     if (plugin.service != null) {
+                        Log.d(TAG, "onMethodCall >>> sendData is called with plugin.service not null ");
+
                         plugin.service.receiveData((JSONObject) call.arguments);
                         break;
                     }
@@ -157,6 +171,8 @@ public class FlutterBackgroundServicePlugin extends BroadcastReceiver implements
             if (method.equalsIgnoreCase("mqSubscribeTopic")) {
                 for (FlutterBackgroundServicePlugin plugin : _instances) {
                     if (plugin.service != null) {
+                        Log.d(TAG, "onMethodCall >>> mqSubscribeTopic is called with plugin.service not null ");
+
                         plugin.service.receiveData((JSONObject) call.arguments);
                         break;
                     }
@@ -167,6 +183,8 @@ public class FlutterBackgroundServicePlugin extends BroadcastReceiver implements
             if (method.equalsIgnoreCase("mqUnSubscribeTopic")) {
                 for (FlutterBackgroundServicePlugin plugin : _instances) {
                     if (plugin.service != null) {
+                        Log.d(TAG, "onMethodCall >>> mqUnSubscribeTopic is called with plugin.service not null ");
+
                         plugin.service.receiveData((JSONObject) call.arguments);
                         break;
                     }

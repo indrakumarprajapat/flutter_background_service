@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:async';
 import 'dart:io';
 import 'dart:ui';
 
@@ -76,14 +75,18 @@ class FlutterBackgroundService {
   bool _isFromInitialization = false;
   bool _isRunning = false;
   bool _isMainChannel = false;
-  static const MethodChannel _backgroundChannel = const MethodChannel('id.flutter/background_service_bg', JSONMethodCodec(),);
-  static const MethodChannel _mainChannel = const MethodChannel('id.flutter/background_service', JSONMethodCodec(),);
-  static const EventChannel _eventChannel = const EventChannel('id.flutter/background_service_bg_event', JSONMethodCodec(),);
 
-  static FlutterBackgroundService _instance =
-      FlutterBackgroundService._internal().._setupBackground();
+  static const MethodChannel _backgroundChannel = const MethodChannel(
+    'id.flutter/background_service_bg', JSONMethodCodec(),);
+  static const MethodChannel _mainChannel = const MethodChannel(
+    'id.flutter/background_service', JSONMethodCodec(),);
+  static const EventChannel _eventChannel = const EventChannel(
+    'id.flutter/background_service_bg_event', JSONMethodCodec(),);
+
+  static FlutterBackgroundService _instance = FlutterBackgroundService._internal().._setupBackground();
 
   FlutterBackgroundService._internal();
+
   factory FlutterBackgroundService() => _instance;
 
   void _setupMain() {
@@ -100,7 +103,8 @@ class FlutterBackgroundService {
 
   Future<dynamic> _handle(MethodCall call) async {
     switch (call.method) {
-      case "onReceiveData":_streamController.sink.add(call.arguments);
+      case "onReceiveData":
+        _streamController.sink.add(call.arguments);
         break;
       default:
     }
@@ -120,9 +124,9 @@ class FlutterBackgroundService {
   Future<bool> configure({
     required IosConfiguration iosConfiguration,
     required AndroidConfiguration androidConfiguration,}) async {
-
     if (Platform.isAndroid) {
-      final CallbackHandle? handle = PluginUtilities.getCallbackHandle(androidConfiguration.onStart);
+      final CallbackHandle? handle = PluginUtilities.getCallbackHandle(
+          androidConfiguration.onStart);
       if (handle == null) {
         return false;
       }
@@ -149,13 +153,13 @@ class FlutterBackgroundService {
 
     if (Platform.isIOS) {
       final CallbackHandle? backgroundHandle =
-          PluginUtilities.getCallbackHandle(iosConfiguration.onBackground);
+      PluginUtilities.getCallbackHandle(iosConfiguration.onBackground);
       if (backgroundHandle == null) {
         return false;
       }
 
       final CallbackHandle? foregroundHandle =
-          PluginUtilities.getCallbackHandle(iosConfiguration.onForeground);
+      PluginUtilities.getCallbackHandle(iosConfiguration.onForeground);
       if (foregroundHandle == null) {
         return false;
       }
@@ -181,7 +185,6 @@ class FlutterBackgroundService {
 
   // Send data from UI to Service, or from Service to UI
   void sendData(Map<String, dynamic> data) async {
-
     if (!(await (isServiceRunning()))) {
       dispose();
       return;
@@ -196,7 +199,7 @@ class FlutterBackgroundService {
   }
 
   // Send data from UI to Service, or from Service to UI
-  void mqPublishMessage(String topic,String payload) async {
+  void mqPublishMessage(String topic, String payload) async {
     if (!(await (isServiceRunning()))) {
       dispose();
       return;
@@ -295,14 +298,26 @@ class FlutterBackgroundService {
   }
 
 
-  StreamController<Map<String, dynamic>?> _streamController = StreamController.broadcast();
+  StreamController<Map<String, dynamic>?> _streamController = StreamController
+      .broadcast();
+
   Stream<Map<String, dynamic>?> get onDataReceived => _streamController.stream;
 
   void dispose() {
     _streamController.close();
   }
+  //
+  // Future<Stream<Map<String, dynamic>?>> getMqttResponseData() async {
+  //   try {
+  //     return _eventChannel.receiveBroadcastStream().map<Map<String, dynamic>?>((value) => value);
+  //   } on PlatformException catch (e) {
+  //     batteryLevel = "Failed to get battery level: '${e.message}'.";
+  //   }
+  // }
 
-  Stream<Map<String, dynamic>?> get onDataMqttReceived => _eventChannel.receiveBroadcastStream().map<Map<String, dynamic>?>((value)=>value);
 
 
+  Stream<Map<String, dynamic>?> get onDataMqttReceived =>
+      _eventChannel.receiveBroadcastStream().map<Map<String, dynamic>?>((
+          value) => value);
 }

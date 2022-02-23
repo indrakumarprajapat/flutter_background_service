@@ -113,6 +113,7 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
         SharedPreferences pref = context.getSharedPreferences("id.flutter.background_service", MODE_PRIVATE);
         return pref.getBoolean("is_foreground", true);
     }
+
     public void setIsServiceStart(boolean value) {
         SharedPreferences pref = getSharedPreferences("id.flutter.background_service", MODE_PRIVATE);
         pref.edit().putBoolean("is_service_start", value).apply();
@@ -132,34 +133,42 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
         SharedPreferences pref = context.getSharedPreferences("id.flutter.background_service", MODE_PRIVATE);
         return pref.getBoolean("is_manually_stopped", false);
     }
-    public void setMqServerCredentials(String host,String username, String password) {
+
+    public void setMqServerCredentials(String host, String username, String password) {
         SharedPreferences pref = getSharedPreferences("id.flutter.background_service", MODE_PRIVATE);
         pref.edit().putString("mq_server_host", host).apply();
     }
-    public void setMqUsername(String host,String username, String password) {
+
+    public void setMqUsername(String host, String username, String password) {
         SharedPreferences pref = getSharedPreferences("id.flutter.background_service", MODE_PRIVATE);
         pref.edit().putString("mq_username", username).apply();
     }
-    public void setMqPassword(String host,String username, String password) {
+
+    public void setMqPassword(String host, String username, String password) {
         SharedPreferences pref = getSharedPreferences("id.flutter.background_service", MODE_PRIVATE);
         pref.edit().putString("mq_password", password).apply();
     }
+
     public static String getMqServerHost(Context context) {
         SharedPreferences pref = context.getSharedPreferences("id.flutter.background_service", MODE_PRIVATE);
         return pref.getString("mq_server_host", "");
     }
+
     public static String getMqClientId(Context context) {
         SharedPreferences pref = context.getSharedPreferences("id.flutter.background_service", MODE_PRIVATE);
         return pref.getString("mq_client_id", "");
     }
+
     public static int getMqPort(Context context) {
         SharedPreferences pref = context.getSharedPreferences("id.flutter.background_service", MODE_PRIVATE);
         return pref.getInt("mq_port", 1883);
     }
+
     public static String getMqUsername(Context context) {
         SharedPreferences pref = context.getSharedPreferences("id.flutter.background_service", MODE_PRIVATE);
         return pref.getString("mq_username", "");
     }
+
     public static String getMqPassword(Context context) {
         SharedPreferences pref = context.getSharedPreferences("id.flutter.background_service", MODE_PRIVATE);
         return pref.getString("mq_password", "");
@@ -168,21 +177,31 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
     @RequiresApi(api = Build.VERSION_CODES.LOLLIPOP)
     @Override
     public void onCreate() {
+
         super.onCreate();
         createNotificationChannel();
         notificationContent = "Preparing";
         updateNotificationInfo();
+
+        Log.d(">>> BGS onCreate()", "onCreate() is called");
+
     }
 
     @Override
     public void onDestroy() {
+        Log.d(">>> BGS onDestroy()", "onDestroy() is called || isManuallyStopped value =" + isManuallyStopped);
+
         if (!isManuallyStopped) {
             enqueue(this);
         } else {
             setManuallyStopped(true);
+            Log.d(">>> BGS onDestroy()", "onDestroy() is called || setManuallyStopped = true");
+
         }
         stopForeground(true);
         isRunning.set(false);
+
+        hive_client.disconnect();
 
         if (backgroundEngine != null) {
             backgroundEngine.getServiceControlSurface().detachFromService();
@@ -193,6 +212,8 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
         methodChannel = null;
         dartCallback = null;
         super.onDestroy();
+
+        Log.d(">>> BGS onDestroy()", "onDestroy() is called");
     }
 
     private void createNotificationChannel() {
@@ -238,6 +259,8 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
     @RequiresApi(api = Build.VERSION_CODES.LOLLIPOP)
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
+        Log.d(">>> BGS onStartCommand", "onStartCommand() is called");
+
 
         setManuallyStopped(false);
         enqueue(this);
@@ -251,7 +274,7 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
 
     @RequiresApi(api = Build.VERSION_CODES.LOLLIPOP)
     private void monitorNetwork() {
-        try{
+        try {
             NetworkRequest networkRequest = new NetworkRequest.Builder()
                     .addCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
                     .addTransportType(NetworkCapabilities.TRANSPORT_WIFI)
@@ -259,7 +282,7 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
                     .build();
             ConnectivityManager connectivityManager = (ConnectivityManager) this.getSystemService(this.CONNECTIVITY_SERVICE);
             connectivityManager.requestNetwork(networkRequest, networkCallback);
-        }catch (Exception e) {
+        } catch (Exception e) {
             e.printStackTrace();
         }
     }
@@ -269,7 +292,7 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
     private void runService() {
         try {
 
-            Log.d(TAG, "runService");
+            Log.d(">>> BGS runService ", "runService is called");
             if (isRunning.get() || (backgroundEngine != null && !backgroundEngine.getDartExecutor().isExecutingDart()))
                 return;
 
@@ -279,7 +302,7 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
             FlutterInjector.instance().flutterLoader().ensureInitializationComplete(getApplicationContext(), null);
             FlutterCallbackInformation callback = FlutterCallbackInformation.lookupCallbackInformation(callbackHandle);
             if (callback == null) {
-                Log.e(TAG, "callback handle not found");
+                Log.e("BGS >>> callback ", "callback handle not found");
                 return;
             }
 
@@ -300,7 +323,7 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
             notificationContent = "Error " + e.getMessage();
             updateNotificationInfo();
 
-            Log.w(TAG, "UnsatisfiedLinkError: After a reboot this may happen for a short period and it is ok to ignore then!" + e.getMessage());
+            Log.w("BGS >>> ERROR", "UnsatisfiedLinkError: After a reboot this may happen for a short period and it is ok to ignore then!" + e.getMessage());
         }
     }
 
@@ -316,16 +339,15 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
                     .serverHost(serverHost)
                     .serverPort(serverPort)
                     .addConnectedListener(context -> {
-                        Log.d(">>> Connected ", context.toString());
+                        Log.d(">>> BGS Connected ", context.toString());
                         if (connectTimer != null) {
                             connectTimer.cancel();
                             connectTimer = null;
                         }
-                        this.subscribeTopic("testc");
                         onMqttConnected();
                         handleSubscriptionResponse();
                     }).addDisconnectedListener(context -> {
-                        Log.d(">>> Disconnected ", context.toString());
+                        Log.d(">>> BGS Disconnected ", context.toString());
                         int PERIOD = 10;
                         if (connectTimer == null) {
                             connectTimer = new Timer();
@@ -342,7 +364,7 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
         }
     }
 
-    private void onMqttConnected(){
+    private void onMqttConnected() {
         try {
             JSONObject mqData = new JSONObject();
             mqData.put("onMqConnected", "connected");
@@ -352,6 +374,9 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
                     Intent intent = new Intent("id.flutter/background_service");
                     intent.putExtra("data", mqData.toString());
                     manager.sendBroadcast(intent);
+
+                    Log.d(">>> BGS onMqttConnected", "sent onMqttConnected is connected");
+
                 } catch (Exception e) {
                     e.printStackTrace();
                 }
@@ -362,7 +387,7 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
     }
 
     private void connectMqtt() {
-        if (hive_client != null && !hive_client.getState().isConnected()) {
+        if (isRunning.get() && hive_client != null && !hive_client.getState().isConnected()) {
             String username = BackgroundService.getMqUsername(this);
             String password = BackgroundService.getMqPassword(this);
             hive_client.toAsync().connectWith()
@@ -372,6 +397,8 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
                     .applySimpleAuth()
                     .keepAlive(10)
                     .send();
+            Log.d(">>> BGS connectMqtt",    "hive_client.toAsync().connectWith()");
+
         }
     }
 
@@ -380,7 +407,7 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
         hive_client.publishes(MqttGlobalPublishFilter.ALL,
                 mqtt3Publish -> {
                     try {
-                        Log.d(">>> G >>> ", mqtt3Publish.toString());
+                        Log.d(">>> BGS >>> ", mqtt3Publish.toString());
 
                         String topic = mqtt3Publish.getTopic().toString();
                         String payload = new String(mqtt3Publish.getPayloadAsBytes());
@@ -390,15 +417,15 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
                         mqData.put("payload", payload);
 
                         if (topic.startsWith(ENV_PREFIX + "/driverwaiting4booking") ||
-                                topic.startsWith(ENV_PREFIX + "/previousbookingrequest")){
-                            showNotification(NotificationType.BOOKING_REQUEST,topic,payload);
-                        }else if (topic.endsWith("/cancel")) {
-                            showNotification(NotificationType.BOOKING_CANCELLED,topic,payload);
-                        }else if (topic
+                                topic.startsWith(ENV_PREFIX + "/previousbookingrequest")) {
+                            showNotification(NotificationType.BOOKING_REQUEST, topic, payload);
+                        } else if (topic.endsWith("/cancel")) {
+                            showNotification(NotificationType.BOOKING_CANCELLED, topic, payload);
+                        } else if (topic
                                 .startsWith(ENV_PREFIX + "/cancelBeforeAcceptBooking")) {
-                            showNotification(NotificationType.BOOKING_CANCELLED,topic,payload);
-                        }else if (topic.contains("/paymentDoneByCust/")) {
-                            showNotification(NotificationType.PAYMENT_DONE,topic,payload);
+                            showNotification(NotificationType.BOOKING_CANCELLED, topic, payload);
+                        } else if (topic.contains("/paymentDoneByCust/")) {
+                            showNotification(NotificationType.PAYMENT_DONE, topic, payload);
                         }
                         if (methodChannel != null) {
                             try {
@@ -566,13 +593,13 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
         public void onAvailable(@NonNull Network network) {
             super.onAvailable(network);
             connectMqtt();
-            Log.d(">>>> conection >>>", "onAvailable(network)");
+            Log.d(">>>> BGS conection >>>", "onAvailable(network)");
         }
 
         @Override
         public void onLost(@NonNull Network network) {
             super.onLost(network);
-            Log.d(">>>> conection >>>", ".onLost(network)");
+            Log.d(">>>> BGS conection >>>", ".onLost(network)");
         }
 
         @Override
@@ -583,12 +610,13 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
         }
     };
 
-    enum NotificationType{
+    enum NotificationType {
         BOOKING_REQUEST,
         BOOKING_CANCELLED,
         PAYMENT_DONE
     }
-    protected void showNotification(NotificationType notificationType,String topic,String payload) {
+
+    protected void showNotification(NotificationType notificationType, String topic, String payload) {
         if (isForegroundService(this)) {
             Intent intent = new Intent(this, WatchdogReceiver.class);
             intent.putExtra("FOREGROUND_DEFAULT", 0);
@@ -598,10 +626,10 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
             } else {
                 pi = PendingIntent.getActivity(BackgroundService.this, 99778, intent, PendingIntent.FLAG_CANCEL_CURRENT);
             }
-            if(notificationType == NotificationType.BOOKING_REQUEST){
+            if (notificationType == NotificationType.BOOKING_REQUEST) {
                 NotificationCompat.Builder builder = new NotificationCompat.Builder(this, "FOREGROUND_DEFAULT")
                         .setSmallIcon(R.drawable.ic_bg_service_small)
-                        .setContentTitle("New Booking Request")
+                        .setContentTitle("this is test New Booking Request")
                         .setContentText(payload)
                         .setPriority(NotificationCompat.PRIORITY_DEFAULT)
 //                    .setContentIntent(pi)
@@ -626,7 +654,7 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
                         mediaPlayer = null;
                     }
                 }
-            }else if(notificationType == NotificationType.BOOKING_CANCELLED){
+            } else if (notificationType == NotificationType.BOOKING_CANCELLED) {
                 NotificationCompat.Builder builder = new NotificationCompat.Builder(this, "FOREGROUND_DEFAULT")
                         .setSmallIcon(R.drawable.ic_bg_service_small)
                         .setContentTitle("Booking Cancelled")
@@ -635,7 +663,7 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
                         .addAction(R.drawable.ic_bg_service_small, getString(R.string.openapp), pi);
                 startForeground(99778, builder.build());
 
-            }else if(notificationType == NotificationType.PAYMENT_DONE){
+            } else if (notificationType == NotificationType.PAYMENT_DONE) {
                 NotificationCompat.Builder builder = new NotificationCompat.Builder(this, "FOREGROUND_DEFAULT")
                         .setSmallIcon(R.drawable.ic_bg_service_small)
                         .setContentTitle("Payment Completed")
