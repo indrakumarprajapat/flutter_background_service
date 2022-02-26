@@ -231,7 +231,7 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
 
 
     protected void updateNotificationInfo() {
-        if (isForegroundService(this)) {
+
 
             String packageName = getApplicationContext().getPackageName();
             Intent i = getPackageManager().getLaunchIntentForPackage(packageName);
@@ -248,11 +248,11 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
                     .setAutoCancel(true)
                     .setOngoing(true)
                     .setContentTitle(notificationTitle)
-                    .setContentText("Boomcab")
+                    .setContentText("Boomcabs")
                     .setContentIntent(pi);
 
             startForeground(99778, mBuilder.build());
-        }
+
     }
 
     @RequiresApi(api = Build.VERSION_CODES.LOLLIPOP)
@@ -639,8 +639,11 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
 
     protected void showNotification(NotificationType notificationType, String topic, String payload) {
         if (isForegroundService(this)) {
-            Intent intent = new Intent(this, WatchdogReceiver.class);
+
+            String packageName = getApplicationContext().getPackageName();
+            Intent intent = getPackageManager().getLaunchIntentForPackage(packageName);
             intent.putExtra("FOREGROUND_DEFAULT", 0);
+
             PendingIntent pi;
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
                 pi = PendingIntent.getActivity(BackgroundService.this, 99778, intent, PendingIntent.FLAG_CANCEL_CURRENT | PendingIntent.FLAG_MUTABLE);
@@ -648,13 +651,17 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
                 pi = PendingIntent.getActivity(BackgroundService.this, 99778, intent, PendingIntent.FLAG_CANCEL_CURRENT);
             }
             if (notificationType == NotificationType.BOOKING_REQUEST) {
+
                 NotificationCompat.Builder builder = new NotificationCompat.Builder(this, "FOREGROUND_DEFAULT")
                         .setSmallIcon(R.mipmap.ic_launcher)
-                        .setContentTitle("this is test New Booking Request")
+                        .setContentTitle("New Booking Request")
                         .setContentText(payload)
                         .setPriority(NotificationCompat.PRIORITY_DEFAULT)
                         .addAction(R.drawable.ic_accept, getString(R.string.accept), pi)
-                        .addAction(R.drawable.ic_pass, getString(R.string.pass), pi);
+                        .addAction(R.drawable.ic_pass, getString(R.string.pass), pi)
+                        .setContentIntent(pi)
+                        .setAutoCancel(true);
+
                 startForeground(99778, builder.build());
 
                 MediaPlayer mediaPlayer = MediaPlayer.create(this, R.raw.booking);
@@ -664,13 +671,16 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
                         new Timer().schedule(new TimerTask() {
                             @Override
                             public void run() {
-                                finalMediaPlayer.start(); //start play t
+                                finalMediaPlayer.start();
+                                finalMediaPlayer.setOnCompletionListener(mp -> updateNotificationInfo());
+
                             }
                         }, 0);
                     }
                 } catch (Exception ex) {
                     if (mediaPlayer != null) {
                         mediaPlayer.release();
+                        updateNotificationInfo();
                         mediaPlayer = null;
                     }
                 }
