@@ -206,12 +206,14 @@ class FlutterBackgroundService {
     }
     if (_isFromInitialization) {
       _mainChannel.invokeMethod("mqPublishMessage", {
+        "action": "mqPublishMessage",
         "topic": topic,
         "payload": payload,
       });
       return;
     }
     _backgroundChannel.invokeMethod("mqPublishMessage", {
+      "action": "mqPublishMessage",
       "topic": topic,
       "payload": payload,
     });
@@ -225,11 +227,13 @@ class FlutterBackgroundService {
     }
     if (_isFromInitialization) {
       _mainChannel.invokeMethod("mqSubscribeTopic", {
+        "action": "mqSubscribeTopic",
         "topic": topic
       });
       return;
     }
     _backgroundChannel.invokeMethod("mqSubscribeTopic", {
+      "action": "mqSubscribeTopic",
       "topic": topic
     });
   }
@@ -242,11 +246,13 @@ class FlutterBackgroundService {
     }
     if (_isFromInitialization) {
       _mainChannel.invokeMethod("mqUnSubscribeTopic", {
+        "action": "mqUnSubscribeTopic",
         "topic": topic
       });
       return;
     }
     _backgroundChannel.invokeMethod("mqUnSubscribeTopic", {
+      "action": "mqUnSubscribeTopic",
       "topic": topic
     });
   }

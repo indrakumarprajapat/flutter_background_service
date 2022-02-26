@@ -345,6 +345,7 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
                             connectTimer = null;
                         }
                         onMqttConnected();
+                        subscribeTopic("testc");
                         handleSubscriptionResponse();
                     }).addDisconnectedListener(context -> {
                         Log.d(">>> BGS Disconnected ", context.toString());
@@ -367,7 +368,7 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
     private void onMqttConnected() {
         try {
             JSONObject mqData = new JSONObject();
-            mqData.put("onMqConnected", "connected");
+            mqData.put("mqdata", "connected");
             if (methodChannel != null) {
                 try {
                     LocalBroadcastManager manager = LocalBroadcastManager.getInstance(this);
@@ -444,20 +445,25 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
     }
 
     void unSubscribeTopic(String topicName) {
+        String top = topicName.replaceAll("-","/");
         hive_client.unsubscribeWith().
-                topicFilter(topicName).send();
+                topicFilter(top).send();
     }
 
     void subscribeTopic(String topicName) {
+        Log.d(">>> BGS Topic Plain", "subscribeTopic >>> ( "+ topicName+" ) is called" );
+        String top = topicName.replaceAll("-","/");
+        Log.d(">>> BGS  Topic Replaced", "subscribeTopic >>> ( "+ top+" ) is called" );
         hive_client.
                 subscribeWith().
-                topicFilter(topicName).
+                topicFilter(top).
                 qos(MqttQos.EXACTLY_ONCE).send();
     }
 
     void publishMessage(String topicName, String message) {
+        String top = topicName.replaceAll("-","/");
         hive_client.toAsync().publishWith()
-                .topic(topicName)
+                .topic(top)
                 .payload(message.getBytes())
                 .qos(MqttQos.EXACTLY_ONCE)
                 .send();
@@ -466,6 +472,22 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
     public void receiveData(JSONObject data) {
         if (methodChannel != null) {
             try {
+                String action = data.getString("action");
+                if (action.equals("mqPublishMessage")){
+                    String topic = data.getString("topic");
+                    String payload = data.getString("payload");
+                    publishMessage(topic,payload);
+                }else if (action.equals("mqSubscribeTopic")){
+                    String topic = data.getString("topic");
+                    subscribeTopic(topic);
+                }else if (action.equals("mqUnSubscribeTopic")){
+                    String topic = data.getString("topic");
+                    unSubscribeTopic(topic);
+                }
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+            try{
                 methodChannel.invokeMethod("onReceiveData", data);
             } catch (Exception e) {
                 e.printStackTrace();
@@ -674,5 +696,4 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
             }
         }
     }
-
 }

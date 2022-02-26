@@ -34,8 +34,8 @@ import io.flutter.plugin.common.JSONMethodCodec;
  * FlutterBackgroundServicePlugin
  */
 public class FlutterBackgroundServicePlugin extends BroadcastReceiver implements FlutterPlugin, MethodCallHandler, ServiceAware, EventChannel.StreamHandler {
-    private static final String TAG = "BACKGROUNDSERVICEPLUGIN";
-    private static final List<FlutterBackgroundServicePlugin> _instances = new ArrayList<>();
+    static final String TAG = "BACKGROUNDSERVICEPLUGIN";
+    static final List<FlutterBackgroundServicePlugin> _instances = new ArrayList<>();
 
     public FlutterBackgroundServicePlugin() {
         _instances.add(this);
