@@ -177,7 +177,6 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
     @RequiresApi(api = Build.VERSION_CODES.LOLLIPOP)
     @Override
     public void onCreate() {
-
         super.onCreate();
         createNotificationChannel();
         notificationContent = "Preparing";
@@ -245,11 +244,11 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
             }
 
             NotificationCompat.Builder mBuilder = new NotificationCompat.Builder(this, "FOREGROUND_DEFAULT")
-                    .setSmallIcon(R.drawable.ic_bg_service_small)
+                    .setSmallIcon(R.mipmap.ic_launcher)
                     .setAutoCancel(true)
                     .setOngoing(true)
                     .setContentTitle(notificationTitle)
-                    .setContentText("only notificaiton")
+                    .setContentText("Boomcab")
                     .setContentIntent(pi);
 
             startForeground(99778, mBuilder.build());
@@ -398,7 +397,7 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
                     .applySimpleAuth()
                     .keepAlive(10)
                     .send();
-            Log.d(">>> BGS connectMqtt",    "hive_client.toAsync().connectWith()");
+            Log.d(">>> BGS connectMqtt", "hive_client.toAsync().connectWith()");
 
         }
     }
@@ -445,15 +444,15 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
     }
 
     void unSubscribeTopic(String topicName) {
-        String top = topicName.replaceAll("-","/");
+        String top = topicName.replaceAll("-", "/");
         hive_client.unsubscribeWith().
                 topicFilter(top).send();
     }
 
     void subscribeTopic(String topicName) {
-        Log.d(">>> BGS Topic Plain", "subscribeTopic >>> ( "+ topicName+" ) is called" );
-        String top = topicName.replaceAll("-","/");
-        Log.d(">>> BGS  Topic Replaced", "subscribeTopic >>> ( "+ top+" ) is called" );
+        Log.d(">>> BGS Topic Plain", "subscribeTopic >>> ( " + topicName + " ) is called");
+        String top = topicName.replaceAll("-", "/");
+        Log.d(">>> BGS  Topic Replaced", "subscribeTopic >>> ( " + top + " ) is called");
         hive_client.
                 subscribeWith().
                 topicFilter(top).
@@ -461,7 +460,7 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
     }
 
     void publishMessage(String topicName, String message) {
-        String top = topicName.replaceAll("-","/");
+        String top = topicName.replaceAll("-", "/");
         hive_client.toAsync().publishWith()
                 .topic(top)
                 .payload(message.getBytes())
@@ -473,21 +472,21 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
         if (methodChannel != null) {
             try {
                 String action = data.getString("action");
-                if (action.equals("mqPublishMessage")){
+                if (action.equals("mqPublishMessage")) {
                     String topic = data.getString("topic");
                     String payload = data.getString("payload");
-                    publishMessage(topic,payload);
-                }else if (action.equals("mqSubscribeTopic")){
+                    publishMessage(topic, payload);
+                } else if (action.equals("mqSubscribeTopic")) {
                     String topic = data.getString("topic");
                     subscribeTopic(topic);
-                }else if (action.equals("mqUnSubscribeTopic")){
+                } else if (action.equals("mqUnSubscribeTopic")) {
                     String topic = data.getString("topic");
                     unSubscribeTopic(topic);
                 }
             } catch (Exception e) {
                 e.printStackTrace();
             }
-            try{
+            try {
                 methodChannel.invokeMethod("onReceiveData", data);
             } catch (Exception e) {
                 e.printStackTrace();
@@ -650,13 +649,12 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
             }
             if (notificationType == NotificationType.BOOKING_REQUEST) {
                 NotificationCompat.Builder builder = new NotificationCompat.Builder(this, "FOREGROUND_DEFAULT")
-                        .setSmallIcon(R.drawable.ic_bg_service_small)
+                        .setSmallIcon(R.mipmap.ic_launcher)
                         .setContentTitle("this is test New Booking Request")
                         .setContentText(payload)
                         .setPriority(NotificationCompat.PRIORITY_DEFAULT)
-//                    .setContentIntent(pi)
-                        .addAction(R.drawable.ic_bg_service_small, getString(R.string.accept), pi)
-                        .addAction(R.drawable.ic_bg_service_small, getString(R.string.pass), pi);
+                        .addAction(R.drawable.ic_accept, getString(R.string.accept), pi)
+                        .addAction(R.drawable.ic_pass, getString(R.string.pass), pi);
                 startForeground(99778, builder.build());
 
                 MediaPlayer mediaPlayer = MediaPlayer.create(this, R.raw.booking);
@@ -678,20 +676,20 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
                 }
             } else if (notificationType == NotificationType.BOOKING_CANCELLED) {
                 NotificationCompat.Builder builder = new NotificationCompat.Builder(this, "FOREGROUND_DEFAULT")
-                        .setSmallIcon(R.drawable.ic_bg_service_small)
+                        .setSmallIcon(R.mipmap.ic_launcher)
                         .setContentTitle("Booking Cancelled")
                         .setContentText(payload)
                         .setPriority(NotificationCompat.PRIORITY_DEFAULT)
-                        .addAction(R.drawable.ic_bg_service_small, getString(R.string.openapp), pi);
+                        .addAction(R.drawable.ic_open_app, getString(R.string.openapp), pi);
                 startForeground(99778, builder.build());
 
             } else if (notificationType == NotificationType.PAYMENT_DONE) {
                 NotificationCompat.Builder builder = new NotificationCompat.Builder(this, "FOREGROUND_DEFAULT")
-                        .setSmallIcon(R.drawable.ic_bg_service_small)
+                        .setSmallIcon(R.mipmap.ic_launcher)
                         .setContentTitle("Payment Completed")
                         .setContentText(payload)
                         .setPriority(NotificationCompat.PRIORITY_DEFAULT)
-                        .addAction(R.drawable.ic_bg_service_small, getString(R.string.openapp), pi);
+                        .addAction(R.drawable.ic_open_app, getString(R.string.openapp), pi);
                 startForeground(99778, builder.build());
             }
         }
