@@ -416,17 +416,18 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
                         mqData.put("topic", topic);
                         mqData.put("payload", payload);
 
-                        if (topic.startsWith(ENV_PREFIX + "/driverwaiting4booking") ||
-                                topic.startsWith(ENV_PREFIX + "/previousbookingrequest")) {
+                        if (topic.startsWith(ENV_PREFIX + "/rd/rq/")) {
                             showNotification(NotificationType.BOOKING_REQUEST, topic, payload);
-                        } else if (topic.endsWith("/cancel")) {
+                        } else if (topic.startsWith(ENV_PREFIX + "/rd/rq/cl/")) {
                             showNotification(NotificationType.BOOKING_CANCELLED, topic, payload);
-                        } else if (topic
-                                .startsWith(ENV_PREFIX + "/cancelBeforeAcceptBooking")) {
+                        } else if (topic.contains(ENV_PREFIX + "/rd/dr/")) {
+                            // check in payload its a cancelled booking or not
                             showNotification(NotificationType.BOOKING_CANCELLED, topic, payload);
-                        } else if (topic.contains("/paymentDoneByCust/")) {
+                        } else if (topic.contains(ENV_PREFIX + "/rd/af/dr/")) {
+                            // check in payload its a payment done or not
                             showNotification(NotificationType.PAYMENT_DONE, topic, payload);
                         }
+
                         if (methodChannel != null) {
                             try {
                                 LocalBroadcastManager manager = LocalBroadcastManager.getInstance(this);
