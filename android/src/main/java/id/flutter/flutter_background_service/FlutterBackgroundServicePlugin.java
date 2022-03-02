@@ -229,24 +229,25 @@ public class FlutterBackgroundServicePlugin extends BroadcastReceiver implements
                 if (channel != null) {
                     channel.invokeMethod("onReceiveData", jData);
                 }
-                try {
-                    if (jData.has("mqdata") && "mqttResponse".equals(jData.getString("mqdata"))) {
-                        if (eventChannel != null && mqttResponseEventSink != null) {
-                            mqttResponseEventSink.success(jData);
-                        }
-                    }
-                } catch (Exception e) {
-                    e.printStackTrace();
-                }
-                try {
-                    if (jData.has("onMqConnected") && "connected".equals(jData.getString("onMqConnected"))) {
-                        if (eventChannel != null && mqttResponseEventSink != null) {
-                            mqttResponseEventSink.success(jData);
-                        }
-                    }
-                } catch (Exception e) {
-                    e.printStackTrace();
-                }
+//                try {
+//                    if (jData.has("mqdata") && "mqttResponse".equals(jData.getString("mqdata"))) {
+//                        if (eventChannel != null && mqttResponseEventSink != null) {
+//                            mqttResponseEventSink.success(jData);
+//                            Log.d(">>> mqttResponse", " mqttResponseEventSink.success(jData);");
+//                        }
+//                    }
+//                } catch (Exception e) {
+//                    e.printStackTrace();
+//                }
+//                try {
+//                    if (jData.has("onMqConnected") && "connected".equals(jData.getString("onMqConnected"))) {
+//                        if (eventChannel != null && mqttResponseEventSink != null) {
+//                            mqttResponseEventSink.success(jData);
+//                        }
+//                    }
+//                } catch (Exception e) {
+//                    e.printStackTrace();
+//                }
 
             } catch (JSONException e) {
                 e.printStackTrace();

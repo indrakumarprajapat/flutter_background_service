@@ -343,9 +343,10 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
                             connectTimer.cancel();
                             connectTimer = null;
                         }
+
                         onMqttConnected();
-                        subscribeTopic("testc");
                         handleSubscriptionResponse();
+
                     }).addDisconnectedListener(context -> {
                         Log.d(">>> BGS Disconnected ", context.toString());
                         int PERIOD = 10;
@@ -416,10 +417,10 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
                         mqData.put("topic", topic);
                         mqData.put("payload", payload);
 
-                        if (topic.startsWith(ENV_PREFIX + "/rd/rq/")) {
-                            showNotification(NotificationType.BOOKING_REQUEST, topic, payload);
-                        } else if (topic.startsWith(ENV_PREFIX + "/rd/rq/cl/")) {
+                         if (topic.startsWith(ENV_PREFIX + "/rd/rq/cl/")) {
                             showNotification(NotificationType.BOOKING_CANCELLED, topic, payload);
+                        } else if  (topic.startsWith(ENV_PREFIX + "/rd/rq/")) {
+                            showNotification(NotificationType.BOOKING_REQUEST, topic, payload);
                         } else if (topic.contains(ENV_PREFIX + "/rd/dr/")) {
                             // check in payload its a cancelled booking or not
                             showNotification(NotificationType.BOOKING_CANCELLED, topic, payload);
@@ -445,14 +446,14 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
     }
 
     void unSubscribeTopic(String topicName) {
-        String top = topicName.replaceAll("-", "/");
+        String top = topicName.replaceAll("=", "/");
         hive_client.unsubscribeWith().
                 topicFilter(top).send();
     }
 
     void subscribeTopic(String topicName) {
         Log.d(">>> BGS Topic Plain", "subscribeTopic >>> ( " + topicName + " ) is called");
-        String top = topicName.replaceAll("-", "/");
+        String top = topicName.replaceAll("=", "/");
         Log.d(">>> BGS  Topic Replaced", "subscribeTopic >>> ( " + top + " ) is called");
         hive_client.
                 subscribeWith().
@@ -461,7 +462,7 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
     }
 
     void publishMessage(String topicName, String message) {
-        String top = topicName.replaceAll("-", "/");
+        String top = topicName.replaceAll("=", "/");
         hive_client.toAsync().publishWith()
                 .topic(top)
                 .payload(message.getBytes())
@@ -673,7 +674,16 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
                             @Override
                             public void run() {
                                 finalMediaPlayer.start();
-                                finalMediaPlayer.setOnCompletionListener(mp -> updateNotificationInfo());
+                                finalMediaPlayer.setOnCompletionListener(mp -> {
+
+                                    updateNotificationInfo();
+                                    try{
+                                        finalMediaPlayer.release();
+                                    } catch (Exception e){
+
+                                    }
+
+                                });
 
                             }
                         }, 0);
