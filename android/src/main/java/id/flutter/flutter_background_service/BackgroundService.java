@@ -730,23 +730,23 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
     }
 
     private void addTopic(String topic) {
-        topicList = getSharedPreferencesTopicList();
+        topicList = getSharedPreferencesTopicList(this);
         if (!topicList.contains(topic)) {
             topicList.add(topic);
-            saveSharedPreferencesTopicList(topicList);
+            saveSharedPreferencesTopicList(this,topicList);
         }
     }
 
     private void removeTopic(String topic) {
-        topicList = getSharedPreferencesTopicList();
+        topicList = getSharedPreferencesTopicList(this);
         if (topicList.contains(topic)) {
             topicList.remove(topic);
-            saveSharedPreferencesTopicList(topicList);
+            saveSharedPreferencesTopicList(this,topicList);
         }
     }
 
     private void subscribeTopicsFromLastSession() {
-        topicList = getSharedPreferencesTopicList();
+        topicList = getSharedPreferencesTopicList(this);
         if (topicList != null && topicList.size() > 0) {
             for (String value : topicList) {
                 hive_client.subscribeWith().topicFilter(value).qos(MqttQos.EXACTLY_ONCE).send();
@@ -754,7 +754,7 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
         }
     }
 
-    private HashSet<String> getSharedPreferencesTopicList() {
+    private HashSet<String> getSharedPreferencesTopicList(Context context) {
         SharedPreferences pref = context.getSharedPreferences("id.flutter.background_service", MODE_PRIVATE);
         HashSet<String> topics = (HashSet<String>) pref.getStringSet("BC_MQ_TOPICS", null);
         if(topics == null){
@@ -763,7 +763,7 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
         return topics;
     }
 
-    private void saveSharedPreferencesTopicList(HashSet<String> topicList) {
+    private void saveSharedPreferencesTopicList(Context context, HashSet<String> topicList) {
         SharedPreferences pref = context.getSharedPreferences("id.flutter.background_service", MODE_PRIVATE);
         pref.edit().putStringSet("BC_MQ_TOPICS",topicList).apply();
     }
