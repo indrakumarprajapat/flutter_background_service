@@ -61,7 +61,7 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
     private boolean isManuallyStopped = false;
     Mqtt3AsyncClient hive_client;
 
-    private Set<String> topicList;
+    private HashSet<String> topicList;
 
     String notificationTitle = "Background Service";
     String notificationContent = "Running";
@@ -355,7 +355,6 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
                         }
 
                         onMqttConnected();
-                        subscribeTopicLastTopic();
                         handleSubscriptionResponse();
 
                     }).addDisconnectedListener(context -> {
@@ -393,6 +392,8 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
                     e.printStackTrace();
                 }
             }
+            // Subscribe all last subscribed topics
+            subscribeTopicsFromLastSession();
         } catch (JSONException e) {
             e.printStackTrace();
         }
@@ -458,17 +459,16 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
 
     void unSubscribeTopic(String topicName) {
         String top = topicName.replaceAll("=", "/");
-        removeTopics(top);
+        removeTopic(top);
         hive_client.unsubscribeWith().topicFilter(top).send();
     }
 
     void subscribeTopic(String topicName) {
         Log.d(">>> BGS Topic Plain", "subscribeTopic >>> ( " + topicName + " ) is called");
         String top = topicName.replaceAll("=", "/");
-
-        saveTopics(top);
         Log.d(">>> BGS  Topic Replaced", "subscribeTopic >>> ( " + top + " ) is called");
 
+        addTopic(top);
         hive_client.subscribeWith().topicFilter(top).qos(MqttQos.EXACTLY_ONCE).send();
     }
 
@@ -729,46 +729,26 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
         }
     }
 
-
-    private void saveTopics(String topic) {
-
-
-        topicList = loadSubscribedTopics();
-
-        if (topicList != null) {
-            topicList = new HashSet<>();
+    private void addTopic(String topic) {
+        topicList = getSharedPreferencesTopicList();
+        if (!topicList.contains(topic)) {
+            topicList.add(topic);
+            saveSharedPreferencesTopicList(topicList);
         }
-        for (String value : topicList) {
-            if (!value.equals(topic)) {
-                topicList.add(topic);
-                Gson gson = new Gson();
-                String json = gson.toJson(topicList);
-                saveSharedPreferencesTopicList(json);
-
-            }
-        }
-
     }
 
+    private void removeTopic(String topic) {
+        topicList = getSharedPreferencesTopicList();
+        if (topicList.contains(topic)) {
+            topicList.remove(topic);
+            saveSharedPreferencesTopicList(topicList);
+        }
+    }
 
-    private void removeTopics(String topic) {
-        if (topicList != null) {
+    private void subscribeTopicsFromLastSession() {
+        topicList = getSharedPreferencesTopicList();
+        if (topicList != null && topicList.size() > 0) {
             for (String value : topicList) {
-                if (value.equals(topic)) {
-                    topicList.remove(topic);
-                    Gson gson = new Gson();
-                    String json = gson.toJson(topicList);
-                    saveSharedPreferencesTopicList(json);
-                }
-            }
-        }
-    }
-
-    private loadSubscribedTopics() {
-        HashSet<String> topic = getSharedPreferencesTopicList();
-        topicList = topic;
-        if (topic != null && topic.size() > 0) {
-            for (String value : topic) {
                 hive_client.subscribeWith().topicFilter(value).qos(MqttQos.EXACTLY_ONCE).send();
             }
         }
@@ -776,12 +756,16 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
 
     private HashSet<String> getSharedPreferencesTopicList() {
         SharedPreferences pref = context.getSharedPreferences("id.flutter.background_service", MODE_PRIVATE);
-        return (HashSet<String>) pref.getStringSet("TOPICSET", new HashSet<String>());
+        HashSet<String> topics = (HashSet<String>) pref.getStringSet("BC_MQ_TOPICS", null);
+        if(topics == null){
+            return new HashSet<String>();
+        }
+        return topics;
     }
 
-    private void saveSharedPreferencesTopicList(String json) {
+    private void saveSharedPreferencesTopicList(HashSet<String> topicList) {
         SharedPreferences pref = context.getSharedPreferences("id.flutter.background_service", MODE_PRIVATE);
-        pref.edit().putStringSet("TOPICSET", json).apply();
+        pref.edit().putStringSet("BC_MQ_TOPICS",topicList).apply();
     }
 
 }
