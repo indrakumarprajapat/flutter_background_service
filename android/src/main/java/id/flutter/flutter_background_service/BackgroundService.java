@@ -28,6 +28,7 @@ import androidx.core.app.NotificationCompat;
 import androidx.localbroadcastmanager.content.LocalBroadcastManager;
 
 
+import com.google.gson.Gson;
 import com.hivemq.client.mqtt.MqttGlobalPublishFilter;
 import com.hivemq.client.mqtt.datatypes.MqttQos;
 import com.hivemq.client.mqtt.mqtt3.Mqtt3AsyncClient;
@@ -36,6 +37,8 @@ import com.hivemq.client.mqtt.mqtt3.Mqtt3Client;
 import org.json.JSONException;
 import org.json.JSONObject;
 
+import java.util.HashSet;
+import java.util.Set;
 import java.util.Timer;
 import java.util.TimerTask;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -58,11 +61,18 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
     private boolean isManuallyStopped = false;
     Mqtt3AsyncClient hive_client;
 
+    private Set<String> topicList;
+
     String notificationTitle = "Background Service";
     String notificationContent = "Running";
 
     private static final String LOCK_NAME = BackgroundService.class.getName() + ".Lock";
     private static volatile WakeLock lockStatic = null; // notice static
+
+    {
+        topicList = new HashSet<String>();
+    }
+
 
     synchronized private static PowerManager.WakeLock getLock(Context context) {
         if (lockStatic == null) {
@@ -233,25 +243,25 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
     protected void updateNotificationInfo() {
 
 
-            String packageName = getApplicationContext().getPackageName();
-            Intent i = getPackageManager().getLaunchIntentForPackage(packageName);
+        String packageName = getApplicationContext().getPackageName();
+        Intent i = getPackageManager().getLaunchIntentForPackage(packageName);
 
-            PendingIntent pi;
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                pi = PendingIntent.getActivity(BackgroundService.this, 99778, i, PendingIntent.FLAG_CANCEL_CURRENT | PendingIntent.FLAG_MUTABLE);
-            } else {
-                pi = PendingIntent.getActivity(BackgroundService.this, 99778, i, PendingIntent.FLAG_CANCEL_CURRENT);
-            }
+        PendingIntent pi;
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            pi = PendingIntent.getActivity(BackgroundService.this, 99778, i, PendingIntent.FLAG_CANCEL_CURRENT | PendingIntent.FLAG_MUTABLE);
+        } else {
+            pi = PendingIntent.getActivity(BackgroundService.this, 99778, i, PendingIntent.FLAG_CANCEL_CURRENT);
+        }
 
-            NotificationCompat.Builder mBuilder = new NotificationCompat.Builder(this, "FOREGROUND_DEFAULT")
-                    .setSmallIcon(R.mipmap.ic_launcher)
-                    .setAutoCancel(true)
-                    .setOngoing(true)
-                    .setContentTitle(notificationTitle)
-                    .setContentText("Boomcabs")
-                    .setContentIntent(pi);
+        NotificationCompat.Builder mBuilder = new NotificationCompat.Builder(this, "FOREGROUND_DEFAULT")
+                .setSmallIcon(R.mipmap.ic_launcher)
+                .setAutoCancel(true)
+                .setOngoing(true)
+                .setContentTitle(notificationTitle)
+                .setContentText("Boomcabs")
+                .setContentIntent(pi);
 
-            startForeground(99778, mBuilder.build());
+        startForeground(99778, mBuilder.build());
 
     }
 
@@ -345,6 +355,7 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
                         }
 
                         onMqttConnected();
+                        subscribeTopicLastTopic();
                         handleSubscriptionResponse();
 
                     }).addDisconnectedListener(context -> {
@@ -417,9 +428,9 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
                         mqData.put("topic", topic);
                         mqData.put("payload", payload);
 
-                         if (topic.startsWith(ENV_PREFIX + "/rd/rq/cl/")) {
+                        if (topic.startsWith(ENV_PREFIX + "/rd/rq/cl/")) {
                             showNotification(NotificationType.BOOKING_CANCELLED, topic, payload);
-                        } else if  (topic.startsWith(ENV_PREFIX + "/rd/rq/")) {
+                        } else if (topic.startsWith(ENV_PREFIX + "/rd/rq/")) {
                             showNotification(NotificationType.BOOKING_REQUEST, topic, payload);
                         } else if (topic.contains(ENV_PREFIX + "/rd/dr/")) {
                             // check in payload its a cancelled booking or not
@@ -447,18 +458,18 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
 
     void unSubscribeTopic(String topicName) {
         String top = topicName.replaceAll("=", "/");
-        hive_client.unsubscribeWith().
-                topicFilter(top).send();
+        removeTopics(top);
+        hive_client.unsubscribeWith().topicFilter(top).send();
     }
 
     void subscribeTopic(String topicName) {
         Log.d(">>> BGS Topic Plain", "subscribeTopic >>> ( " + topicName + " ) is called");
         String top = topicName.replaceAll("=", "/");
+
+        saveTopics(top);
         Log.d(">>> BGS  Topic Replaced", "subscribeTopic >>> ( " + top + " ) is called");
-        hive_client.
-                subscribeWith().
-                topicFilter(top).
-                qos(MqttQos.EXACTLY_ONCE).send();
+
+        hive_client.subscribeWith().topicFilter(top).qos(MqttQos.EXACTLY_ONCE).send();
     }
 
     void publishMessage(String topicName, String message) {
@@ -592,6 +603,7 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
                 }
                 return;
             }
+
             if (method.equalsIgnoreCase("mqUnSubscribeTopic")) {
                 JSONObject arg = (JSONObject) call.arguments;
                 if (arg.has("topic")) {
@@ -639,6 +651,7 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
         PAYMENT_DONE
     }
 
+
     protected void showNotification(NotificationType notificationType, String topic, String payload) {
         if (isForegroundService(this)) {
 
@@ -677,9 +690,9 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
                                 finalMediaPlayer.setOnCompletionListener(mp -> {
 
                                     updateNotificationInfo();
-                                    try{
+                                    try {
                                         finalMediaPlayer.release();
-                                    } catch (Exception e){
+                                    } catch (Exception e) {
 
                                     }
 
@@ -715,4 +728,60 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
             }
         }
     }
+
+
+    private void saveTopics(String topic) {
+
+
+        topicList = loadSubscribedTopics();
+
+        if (topicList != null) {
+            topicList = new HashSet<>();
+        }
+        for (String value : topicList) {
+            if (!value.equals(topic)) {
+                topicList.add(topic);
+                Gson gson = new Gson();
+                String json = gson.toJson(topicList);
+                saveSharedPreferencesTopicList(json);
+
+            }
+        }
+
+    }
+
+
+    private void removeTopics(String topic) {
+        if (topicList != null) {
+            for (String value : topicList) {
+                if (value.equals(topic)) {
+                    topicList.remove(topic);
+                    Gson gson = new Gson();
+                    String json = gson.toJson(topicList);
+                    saveSharedPreferencesTopicList(json);
+                }
+            }
+        }
+    }
+
+    private loadSubscribedTopics() {
+        HashSet<String> topic = getSharedPreferencesTopicList();
+        topicList = topic;
+        if (topic != null && topic.size() > 0) {
+            for (String value : topic) {
+                hive_client.subscribeWith().topicFilter(value).qos(MqttQos.EXACTLY_ONCE).send();
+            }
+        }
+    }
+
+    private HashSet<String> getSharedPreferencesTopicList() {
+        SharedPreferences pref = context.getSharedPreferences("id.flutter.background_service", MODE_PRIVATE);
+        return (HashSet<String>) pref.getStringSet("TOPICSET", new HashSet<String>());
+    }
+
+    private void saveSharedPreferencesTopicList(String json) {
+        SharedPreferences pref = context.getSharedPreferences("id.flutter.background_service", MODE_PRIVATE);
+        pref.edit().putStringSet("TOPICSET", json).apply();
+    }
+
 }
