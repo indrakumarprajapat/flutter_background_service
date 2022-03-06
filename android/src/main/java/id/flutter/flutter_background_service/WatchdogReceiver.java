@@ -13,8 +13,8 @@ public class WatchdogReceiver extends BroadcastReceiver {
     @Override
     public void onReceive(Context context, Intent intent) {
         SharedPreferences pref = context.getSharedPreferences("id.flutter.background_service", MODE_PRIVATE);
-        boolean isServiceStart = pref.getBoolean("is_service_start",false);
-        if(isServiceStart && !BackgroundService.isManuallyStopped(context)){
+//        boolean isServiceStart = pref.getBoolean("is_service_start",false);
+        if(!BackgroundService.isManuallyStopped(context)){
             if (BackgroundService.isForegroundService(context)){
                 ContextCompat.startForegroundService(context, new Intent(context, BackgroundService.class));
             } else {

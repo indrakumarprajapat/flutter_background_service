@@ -53,6 +53,10 @@ class AndroidConfiguration {
   final int mqServerPort;
   final String mqClientId;
 
+  final int locSetInterval;
+  final int locSetFastestInterval;
+  final int locSetPriority;
+
   AndroidConfiguration({
     required this.onStart,
     this.onMqConnected,
@@ -66,7 +70,10 @@ class AndroidConfiguration {
     required this.mqUsername,
     required this.mqPassword,
     required this.mqServerPort,
-    required this.mqClientId
+    required this.mqClientId,
+    required this.locSetInterval,
+    required this.locSetFastestInterval,
+    required this.locSetPriority
   });
 }
 
@@ -78,12 +85,16 @@ class FlutterBackgroundService {
 
   static const MethodChannel _backgroundChannel = const MethodChannel(
     'id.flutter/background_service_bg', JSONMethodCodec(),);
+
   static const MethodChannel _mainChannel = const MethodChannel(
     'id.flutter/background_service', JSONMethodCodec(),);
+
   static const EventChannel _eventChannel = const EventChannel(
     'id.flutter/background_service_bg_event', JSONMethodCodec(),);
 
-  static FlutterBackgroundService _instance = FlutterBackgroundService._internal().._setupBackground();
+  static FlutterBackgroundService _instance = FlutterBackgroundService
+      ._internal()
+    .._setupBackground();
 
   FlutterBackgroundService._internal();
 
@@ -145,6 +156,9 @@ class FlutterBackgroundService {
           "mq_username": androidConfiguration.mqUsername,
           "mq_password": androidConfiguration.mqPassword,
           "mq_client_id": androidConfiguration.mqClientId,
+          "loc_interval": androidConfiguration.locSetInterval,
+          "loc_fastestInterval": androidConfiguration.locSetFastestInterval,
+          "loc_priority": androidConfiguration.locSetPriority,
         },
       );
 
@@ -218,6 +232,24 @@ class FlutterBackgroundService {
       "payload": payload,
     });
   }
+
+  // Send data from UI to Service, or from Service to UI
+  void getCurrentLocation() async {
+    if (!(await (isServiceRunning()))) {
+      dispose();
+      return;
+    }
+    if (_isFromInitialization) {
+      _mainChannel.invokeMethod("getCurrentLocation", {
+        "action": "getCurrentLocation",
+      });
+      return;
+    }
+    _backgroundChannel.invokeMethod("getCurrentLocation", {
+      "action": "getCurrentLocation",
+    });
+  }
+
 
   // Send data from UI to Service, or from Service to UI
   void mqSubscribeTopic(String topic) async {
@@ -312,6 +344,7 @@ class FlutterBackgroundService {
   void dispose() {
     _streamController.close();
   }
+
   //
   // Future<Stream<Map<String, dynamic>?>> getMqttResponseData() async {
   //   try {
@@ -320,7 +353,6 @@ class FlutterBackgroundService {
   //     batteryLevel = "Failed to get battery level: '${e.message}'.";
   //   }
   // }
-
 
 
   Stream<Map<String, dynamic>?> get onDataMqttReceived =>

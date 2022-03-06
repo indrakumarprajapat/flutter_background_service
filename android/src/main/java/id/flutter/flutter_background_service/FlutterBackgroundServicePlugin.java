@@ -65,7 +65,8 @@ public class FlutterBackgroundServicePlugin extends BroadcastReceiver implements
 
 
     private static void configure(Context context, long callbackHandleId, boolean isForeground, boolean isServiceStart, boolean autoStartOnBoot,
-                                  String mqServerHost, int mqPort, String mqUsername, String mqPassword, String mqClientId) {
+                                  String mqServerHost, int mqPort, String mqUsername, String mqPassword, String mqClientId,
+                                  long setInterval, long setFastestInterval, int setPriority) {
         SharedPreferences pref = context.getSharedPreferences("id.flutter.background_service", MODE_PRIVATE);
         pref.edit()
                 .putLong("callback_handle", callbackHandleId)
@@ -77,6 +78,9 @@ public class FlutterBackgroundServicePlugin extends BroadcastReceiver implements
                 .putString("mq_username", mqUsername)
                 .putString("mq_password", mqPassword)
                 .putString("mq_client_id", mqClientId)
+                .putLong("loc_interval", setInterval)
+                .putLong("loc_fastestInterval", setFastestInterval)
+                .putInt("loc_priority", setPriority)
                 .apply();
         Log.d(TAG, "configure() is called from flutter bg plugin");
 
@@ -105,12 +109,19 @@ public class FlutterBackgroundServicePlugin extends BroadcastReceiver implements
                 boolean isForeground = arg.getBoolean("is_foreground_mode");
                 boolean isServiceStart = arg.getBoolean("is_service_start");
                 boolean autoStartOnBoot = arg.getBoolean("auto_start_on_boot");
+
                 String serverHost = arg.getString("mq_server_host");
                 String clientId = arg.getString("mq_client_id");
                 int serverPort = arg.getInt("mq_port");
                 String username = arg.getString("mq_username");
                 String password = arg.getString("mq_password");
-                configure(context, callbackHandle, isForeground, isServiceStart, autoStartOnBoot, serverHost, serverPort, username, password, clientId);
+                long setInterval = arg.getLong("loc_interval");
+                long setFastestInterval = arg.getLong("loc_fastestInterval");
+                int setPriority = arg.getInt("loc_priority");
+
+
+                configure(context, callbackHandle, isForeground, isServiceStart, autoStartOnBoot, serverHost, serverPort,
+                        username, password, clientId,setInterval, setFastestInterval, setPriority );
 
                 if (autoStartOnBoot && isServiceStart) {
                     start();
@@ -160,6 +171,17 @@ public class FlutterBackgroundServicePlugin extends BroadcastReceiver implements
                 for (FlutterBackgroundServicePlugin plugin : _instances) {
                     if (plugin.service != null) {
                         Log.d(TAG, "onMethodCall >>> sendData is called with plugin.service not null ");
+
+                        plugin.service.receiveData((JSONObject) call.arguments);
+                        break;
+                    }
+                }
+                result.success(true);
+                return;
+            } if (method.equalsIgnoreCase("getCurrentLocation")) {
+                for (FlutterBackgroundServicePlugin plugin : _instances) {
+                    if (plugin.service != null) {
+                        Log.d(TAG, "onMethodCall >>> get Current location is called");
 
                         plugin.service.receiveData((JSONObject) call.arguments);
                         break;
@@ -228,6 +250,8 @@ public class FlutterBackgroundServicePlugin extends BroadcastReceiver implements
                 JSONObject jData = new JSONObject(data);
                 if (channel != null) {
                     channel.invokeMethod("onReceiveData", jData);
+                    Log.d(">>> onReceiveData >>", "" + jData);
+
                 }
 //                try {
 //                    if (jData.has("mqdata") && "mqttResponse".equals(jData.getString("mqdata"))) {

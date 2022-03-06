@@ -10,6 +10,7 @@ import android.app.Service;
 import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
+import android.location.Location;
 import android.media.MediaPlayer;
 import android.net.ConnectivityManager;
 import android.net.Network;
@@ -17,6 +18,7 @@ import android.net.NetworkCapabilities;
 import android.net.NetworkRequest;
 import android.os.Build;
 import android.os.IBinder;
+import android.os.Looper;
 import android.os.PowerManager;
 import android.os.PowerManager.WakeLock;
 import android.util.Log;
@@ -25,9 +27,18 @@ import androidx.annotation.NonNull;
 import androidx.annotation.RequiresApi;
 import androidx.core.app.AlarmManagerCompat;
 import androidx.core.app.NotificationCompat;
+import androidx.core.content.ContextCompat;
 import androidx.localbroadcastmanager.content.LocalBroadcastManager;
 
 
+import com.google.android.gms.location.FusedLocationProviderClient;
+import com.google.android.gms.location.LocationCallback;
+import com.google.android.gms.location.LocationRequest;
+import com.google.android.gms.location.LocationResult;
+import com.google.android.gms.location.LocationServices;
+import com.google.android.gms.tasks.CancellationToken;
+import com.google.android.gms.tasks.OnSuccessListener;
+import com.google.android.gms.tasks.OnTokenCanceledListener;
 import com.google.gson.Gson;
 import com.hivemq.client.mqtt.MqttGlobalPublishFilter;
 import com.hivemq.client.mqtt.datatypes.MqttQos;
@@ -74,12 +85,21 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
     }
 
 
+    private LocationRequest locationRequest;
+
+    private FusedLocationProviderClient fusedLocationProviderClient;
+
+    private LocationCallback locationCallback;
+
+    private Location location;
+
+    private PowerManager.WakeLock wakeLock;
+
+
     synchronized private static PowerManager.WakeLock getLock(Context context) {
         if (lockStatic == null) {
-            PowerManager mgr = (PowerManager) context
-                    .getSystemService(Context.POWER_SERVICE);
-            lockStatic = mgr.newWakeLock(PowerManager.FULL_WAKE_LOCK,
-                    LOCK_NAME);
+            PowerManager mgr = (PowerManager) context.getSystemService(Context.POWER_SERVICE);
+            lockStatic = mgr.newWakeLock(PowerManager.FULL_WAKE_LOCK, LOCK_NAME);
             lockStatic.setReferenceCounted(true);
         }
         return (lockStatic);
@@ -184,6 +204,21 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
         return pref.getString("mq_password", "");
     }
 
+    public static Long getInterval(Context context) {
+        SharedPreferences pref = context.getSharedPreferences("id.flutter.background_service", MODE_PRIVATE);
+        return pref.getLong("loc_interval", 0);
+    }
+
+    public static Long getFastestInterval(Context context) {
+        SharedPreferences pref = context.getSharedPreferences("id.flutter.background_service", MODE_PRIVATE);
+        return pref.getLong("loc_fastestInterval", 0);
+    }
+
+    public static int getLocationPriority(Context context) {
+        SharedPreferences pref = context.getSharedPreferences("id.flutter.background_service", MODE_PRIVATE);
+        return pref.getInt("loc_priority", 0);
+    }
+
     @RequiresApi(api = Build.VERSION_CODES.LOLLIPOP)
     @Override
     public void onCreate() {
@@ -194,7 +229,147 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
 
         Log.d(">>> BGS onCreate()", "onCreate() is called");
 
+        fusedLocationProviderClient = LocationServices.getFusedLocationProviderClient(this);
+
+        locationCallback = new LocationCallback() {
+            @Override
+            public void onLocationResult(@NonNull LocationResult locationResult) {
+                super.onLocationResult(locationResult);
+                onNewLocation(locationResult.getLastLocation());
+            }
+        };
+
+        createLocationRequest();
+        getLastLocation();
+
+        startTracking();
+
     }
+
+
+    // Location tracking >>>>>
+    private void createLocationRequest() {
+        locationRequest = LocationRequest.create();
+        locationRequest.setInterval(getInterval(this));
+        locationRequest.setFastestInterval(getFastestInterval(this));
+        locationRequest.setPriority(getLocationPriority(this));
+    }
+
+    private void getLastLocation() {
+        try {
+            fusedLocationProviderClient.getLastLocation().addOnSuccessListener(lastLocation -> {
+                if (lastLocation != null) {
+                    location = lastLocation;
+                } else {
+                    Log.d(TAG, "Failed to get location.");
+                }
+            });
+
+        } catch (SecurityException securityException) {
+            Log.d(TAG, "Lost location permission.$unlikely");
+        }
+    }
+
+    private void onNewLocation(Location location) {
+        Log.d(TAG, "New location:  onNewLocation");
+        this.location = location;
+        updateNotificationInfo(location.toString());
+        try {
+            JSONObject mqData = new JSONObject();
+            mqData.put("responseData", "LocationData");
+            mqData.put("LocationValue", location.toString());
+            if (methodChannel != null) {
+                try {
+                    localBroadcastManager(mqData, ">>>BGS onNewLocation", "Send new location to flutter");
+                } catch (Exception e) {
+                    e.printStackTrace();
+                }
+            }
+        } catch (JSONException e) {
+            e.printStackTrace();
+        }
+    }
+
+    private void startTracking() {
+
+//        lockStatic.acquire(24 * 60 * 60 * 1000L /*24 hours max */);
+
+        Log.d(TAG, "Requesting location updates");
+        try {
+            fusedLocationProviderClient.requestLocationUpdates(locationRequest, locationCallback, Looper.myLooper());
+        } catch (SecurityException securityException) {
+
+//            if (lockStatic.isHeld() == true) {
+//                lockStatic.release();
+//            }
+
+            Log.d(TAG, "Lost location permission. Could not request updates");
+        }
+    }
+
+    private void getCurrentLocation() {
+        Log.d(TAG, ">>> Requesting current location");
+        try {
+
+
+            fusedLocationProviderClient.getCurrentLocation(100, new CancellationToken() {
+                @NonNull
+                @Override
+                public CancellationToken onCanceledRequested(@NonNull OnTokenCanceledListener onTokenCanceledListener) {
+                    return null;
+                }
+
+                @Override
+                public boolean isCancellationRequested() {
+                    return false;
+                }
+            }).addOnSuccessListener(location -> {
+                if (location != null) {
+                    this.location = location;
+
+                    JSONObject currentLocation = new JSONObject();
+                    try {
+                        currentLocation.put("responseData", "CurrentLocationData");
+                        currentLocation.put("CurrentLocation", location.toString());
+                        localBroadcastManager(currentLocation, ">>> BGS CurrentLoc " , "broadcast getCurrentLocation");
+
+
+                    } catch (JSONException e) {
+                        e.printStackTrace();
+                    }
+
+                }
+
+            });
+
+        } catch (SecurityException securityException) {
+            Log.d(TAG, "Lost location permission. Could not request updates");
+        }
+
+    }
+
+    private void stopTracking() {
+//        if (lockStatic.isHeld() == true) {
+//            lockStatic.release();
+//        }
+        Log.d(TAG, "Removing location updates");
+        try {
+            fusedLocationProviderClient.removeLocationUpdates(locationCallback);
+        } catch (SecurityException unlikely) {
+            Log.d(TAG, "Lost location permission. Could not remove updates. $unlikely");
+        }
+    }
+
+    // Location >>>>>
+
+    private void localBroadcastManager(JSONObject broadcastData, String tag, String logString) {
+        LocalBroadcastManager manager = LocalBroadcastManager.getInstance(this);
+        Intent intent = new Intent("id.flutter/background_service");
+        intent.putExtra("data", broadcastData.toString());
+        manager.sendBroadcast(intent);
+        Log.d(tag, logString);
+    }
+
 
     @Override
     public void onDestroy() {
@@ -239,10 +414,7 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
         }
     }
 
-
     protected void updateNotificationInfo() {
-
-
         String packageName = getApplicationContext().getPackageName();
         Intent i = getPackageManager().getLaunchIntentForPackage(packageName);
 
@@ -265,11 +437,34 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
 
     }
 
+    protected void updateNotificationInfo(String location) {
+        String packageName = getApplicationContext().getPackageName();
+        Intent i = getPackageManager().getLaunchIntentForPackage(packageName);
+
+        PendingIntent pi;
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            pi = PendingIntent.getActivity(BackgroundService.this, 99778, i, PendingIntent.FLAG_CANCEL_CURRENT | PendingIntent.FLAG_MUTABLE);
+        } else {
+            pi = PendingIntent.getActivity(BackgroundService.this, 99778, i, PendingIntent.FLAG_CANCEL_CURRENT);
+        }
+
+        NotificationCompat.Builder mBuilder = new NotificationCompat.Builder(this, "FOREGROUND_DEFAULT")
+                .setSmallIcon(R.mipmap.ic_launcher)
+                .setAutoCancel(true)
+                .setOngoing(true)
+                .setContentTitle(notificationTitle)
+                .setContentText(location.toString())
+                .setContentIntent(pi);
+
+        startForeground(99778, mBuilder.build());
+
+    }
+
+
     @RequiresApi(api = Build.VERSION_CODES.LOLLIPOP)
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
         Log.d(">>> BGS onStartCommand", "onStartCommand() is called");
-
 
         setManuallyStopped(false);
         enqueue(this);
@@ -277,7 +472,9 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
         initializeConnection();
 
         getLock(getApplicationContext()).acquire();
-//        monitorNetwork();
+
+//      monitorNetwork();
+
         return START_STICKY;
     }
 
@@ -378,15 +575,11 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
     private void onMqttConnected() {
         try {
             JSONObject mqData = new JSONObject();
-            mqData.put("mqdata", "connected");
+            mqData.put("responseData", "connected");
             if (methodChannel != null) {
                 try {
-                    LocalBroadcastManager manager = LocalBroadcastManager.getInstance(this);
-                    Intent intent = new Intent("id.flutter/background_service");
-                    intent.putExtra("data", mqData.toString());
-                    manager.sendBroadcast(intent);
 
-                    Log.d(">>> BGS onMqttConnected", "sent onMqttConnected is connected");
+                    localBroadcastManager(mqData, ">>> BGS onMqttConnected", "sent onMqttConnected is connected");
 
                 } catch (Exception e) {
                     e.printStackTrace();
@@ -443,10 +636,9 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
 
                         if (methodChannel != null) {
                             try {
-                                LocalBroadcastManager manager = LocalBroadcastManager.getInstance(this);
-                                Intent intent = new Intent("id.flutter/background_service");
-                                intent.putExtra("data", mqData.toString());
-                                manager.sendBroadcast(intent);
+
+                                localBroadcastManager(mqData, ">>> BGS >>>  ", "handleSubscriptionResponse broadcast");
+
                             } catch (Exception e) {
                                 e.printStackTrace();
                             }
@@ -495,6 +687,8 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
                 } else if (action.equals("mqUnSubscribeTopic")) {
                     String topic = data.getString("topic");
                     unSubscribeTopic(topic);
+                } else if (action.equals(" ")) {
+                    getCurrentLocation();
                 }
             } catch (Exception e) {
                 e.printStackTrace();
@@ -566,19 +760,18 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
                 } else {
                     pi = PendingIntent.getBroadcast(getApplicationContext(), 111, intent, PendingIntent.FLAG_CANCEL_CURRENT);
                 }
-
                 AlarmManager alarmManager = (AlarmManager) getSystemService(ALARM_SERVICE);
                 alarmManager.cancel(pi);
+                stopTracking();
                 stopSelf();
                 result.success(true);
                 return;
             }
 
             if (method.equalsIgnoreCase("sendData")) {
-                LocalBroadcastManager manager = LocalBroadcastManager.getInstance(this);
-                Intent intent = new Intent("id.flutter/background_service");
-                intent.putExtra("data", ((JSONObject) call.arguments).toString());
-                manager.sendBroadcast(intent);
+
+                localBroadcastManager(((JSONObject) call.arguments), ">>>BGS sendData",
+                        "sendData broadcast form send Data method Channel");
                 result.success(true);
                 return;
             }
@@ -755,17 +948,17 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
     }
 
     private HashSet<String> getSharedPreferencesTopicList() {
-        SharedPreferences pref = context.getSharedPreferences("id.flutter.background_service", MODE_PRIVATE);
+        SharedPreferences pref = this.getSharedPreferences("id.flutter.background_service", MODE_PRIVATE);
         HashSet<String> topics = (HashSet<String>) pref.getStringSet("BC_MQ_TOPICS", null);
-        if(topics == null){
+        if (topics == null) {
             return new HashSet<String>();
         }
         return topics;
     }
 
     private void saveSharedPreferencesTopicList(HashSet<String> topicList) {
-        SharedPreferences pref = context.getSharedPreferences("id.flutter.background_service", MODE_PRIVATE);
-        pref.edit().putStringSet("BC_MQ_TOPICS",topicList).apply();
+        SharedPreferences pref = this.getSharedPreferences("id.flutter.background_service", MODE_PRIVATE);
+        pref.edit().putStringSet("BC_MQ_TOPICS", topicList).apply();
     }
 
 }
