@@ -277,7 +277,14 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
         try {
             JSONObject mqData = new JSONObject();
             mqData.put("responseData", "LocationData");
-            mqData.put("LocationValue", location.toString());
+            String locDetail = location.getLatitude()+"|" +
+                    location.getLongitude()+"|" +
+                    location.getAltitude()+"|" +
+                    location.getAccuracy()+"|" +
+                    location.getBearing()+"|" +
+                    location.getSpeed()+"|" +
+                    location.getProvider();
+            mqData.put("LocationValue", locDetail);
             if (methodChannel != null) {
                 try {
                     localBroadcastManager(mqData, ">>>BGS onNewLocation", "Send new location to flutter");
