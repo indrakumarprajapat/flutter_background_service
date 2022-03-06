@@ -618,7 +618,7 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
                         String topic = mqtt3Publish.getTopic().toString();
                         String payload = new String(mqtt3Publish.getPayloadAsBytes());
                         JSONObject mqData = new JSONObject();
-                        mqData.put("mqdata", "mqttResponse");
+                        mqData.put("responseData", "mqttResponse");
                         mqData.put("topic", topic);
                         mqData.put("payload", payload);
 
