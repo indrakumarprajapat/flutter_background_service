@@ -52,6 +52,8 @@ class AndroidConfiguration {
   final String mqPassword;
   final int mqServerPort;
   final String mqClientId;
+  final String driverId;
+  final String apiToken;
 
   final int locSetInterval;
   final int locSetFastestInterval;
@@ -73,7 +75,9 @@ class AndroidConfiguration {
     required this.mqClientId,
     required this.locSetInterval,
     required this.locSetFastestInterval,
-    required this.locSetPriority
+    required this.locSetPriority,
+    required this.driverId,
+    required this.apiToken
   });
 }
 
@@ -159,6 +163,8 @@ class FlutterBackgroundService {
           "loc_interval": androidConfiguration.locSetInterval,
           "loc_fastestInterval": androidConfiguration.locSetFastestInterval,
           "loc_priority": androidConfiguration.locSetPriority,
+          "driver_id": androidConfiguration.driverId,
+          "api_token": androidConfiguration.apiToken
         },
       );
 

@@ -66,7 +66,7 @@ public class FlutterBackgroundServicePlugin extends BroadcastReceiver implements
 
     private static void configure(Context context, long callbackHandleId, boolean isForeground, boolean isServiceStart, boolean autoStartOnBoot,
                                   String mqServerHost, int mqPort, String mqUsername, String mqPassword, String mqClientId,
-                                  long setInterval, long setFastestInterval, int setPriority) {
+                                  long setInterval, long setFastestInterval, int setPriority, String driverId, String apiToken) {
         SharedPreferences pref = context.getSharedPreferences("id.flutter.background_service", MODE_PRIVATE);
         pref.edit()
                 .putLong("callback_handle", callbackHandleId)
@@ -81,6 +81,8 @@ public class FlutterBackgroundServicePlugin extends BroadcastReceiver implements
                 .putLong("loc_interval", setInterval)
                 .putLong("loc_fastestInterval", setFastestInterval)
                 .putInt("loc_priority", setPriority)
+                .putString("driver_id", driverId)
+                .putString("api_token", apiToken)
                 .apply();
         Log.d(TAG, "configure() is called from flutter bg plugin");
 
@@ -118,10 +120,12 @@ public class FlutterBackgroundServicePlugin extends BroadcastReceiver implements
                 long setInterval = arg.getLong("loc_interval");
                 long setFastestInterval = arg.getLong("loc_fastestInterval");
                 int setPriority = arg.getInt("loc_priority");
-
+                String driverId = arg.getString("driver_id");
+                String apiToken = arg.getString("api_token");
 
                 configure(context, callbackHandle, isForeground, isServiceStart, autoStartOnBoot, serverHost, serverPort,
-                        username, password, clientId,setInterval, setFastestInterval, setPriority );
+                        username, password, clientId,setInterval, setFastestInterval, setPriority ,
+                        driverId,apiToken);
 
                 if (autoStartOnBoot && isServiceStart) {
                     start();

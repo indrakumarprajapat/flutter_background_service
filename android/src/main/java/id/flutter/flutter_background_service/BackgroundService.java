@@ -62,6 +62,9 @@ import io.flutter.plugin.common.JSONMethodCodec;
 import io.flutter.plugin.common.MethodCall;
 import io.flutter.plugin.common.MethodChannel;
 import io.flutter.view.FlutterCallbackInformation;
+import retrofit2.Call;
+import retrofit2.Callback;
+import retrofit2.Response;
 
 public class BackgroundService extends Service implements MethodChannel.MethodCallHandler {
     private static final String TAG = "BackgroundService";
@@ -219,6 +222,25 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
         return pref.getInt("loc_priority", 0);
     }
 
+    public void setDriverId(String driverId) {
+        SharedPreferences pref = getSharedPreferences("id.flutter.background_service", MODE_PRIVATE);
+        pref.edit().putString("driver_id", driverId).apply();
+    }
+
+    public static String getDriverId(Context context) {
+        SharedPreferences pref = context.getSharedPreferences("id.flutter.background_service", MODE_PRIVATE);
+        return pref.getString("driver_id", "0");
+    }
+    public void setApiTokenValue(String token) {
+        SharedPreferences pref = getSharedPreferences("id.flutter.background_service", MODE_PRIVATE);
+        pref.edit().putString("api_token",token).apply();
+    }
+
+    public static String getApiTokenValue(Context context) {
+        SharedPreferences pref = context.getSharedPreferences("id.flutter.background_service", MODE_PRIVATE);
+        return pref.getString("api_token", "");
+    }
+
     @RequiresApi(api = Build.VERSION_CODES.LOLLIPOP)
     @Override
     public void onCreate() {
@@ -291,6 +313,30 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
                 } catch (Exception e) {
                     e.printStackTrace();
                 }
+            }
+
+            try{
+                /*Create handle for the RetrofitInstance interface*/
+                String token = getApiTokenValue(this);
+                if(token != null && token.length() > 10){
+                    ApiEndpoints apiEndpoints = RetrofitClientInstance.getRetrofitInstance(token).create (ApiEndpoints.class);
+                    Call<DriverLocation> call = apiEndpoints.updateDriverLocation(new DriverLocation(),
+                            String.valueOf(location.getLatitude()),String.valueOf(location.getLatitude()),
+                            getDriverId(this));
+                    call.enqueue(new Callback<DriverLocation>() {
+                        @Override
+                        public void onResponse(Call<DriverLocation> call, Response<DriverLocation> response) {
+                            Log.d(">>> ApiCall-Success >",response.toString());
+                        }
+
+                        @Override
+                        public void onFailure(Call<DriverLocation> call, Throwable t) {
+                            Log.d(">>> ApiCall-Failed > ",t.getMessage());
+                        }
+                    });
+                }
+            }catch (Exception e){
+                e.printStackTrace();
             }
         } catch (JSONException e) {
             e.printStackTrace();
@@ -694,7 +740,12 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
                 } else if (action.equals("mqUnSubscribeTopic")) {
                     String topic = data.getString("topic");
                     unSubscribeTopic(topic);
-                } else if (action.equals(" ")) {
+                } else if (action.equals("setDriverDetails")) {
+                    String driverId = data.getString("driver_id");
+                    String apiToken = data.getString("api_token");
+                    setDriverId(driverId);
+                    setApiTokenValue(apiToken);
+                } else if (action.equals("getCurrentLocation")) {
                     getCurrentLocation();
                 }
             } catch (Exception e) {
