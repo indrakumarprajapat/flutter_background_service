@@ -579,7 +579,7 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
 
     Timer bookingCounterTimer = null;
     static final int PASS_TIMEOUT = 30;
-    static int timerCurrentTick = 30;
+    static int timerCurrentTick = PASS_TIMEOUT;
 
     private void startBookingStartProcess(String payload) {
         messageOnNewTrip = payload;
@@ -598,7 +598,7 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
 
         if (bookingCounterTimer == null) {
             bookingCounterTimer = new Timer();
-            timerCurrentTick = 0;
+            timerCurrentTick = PASS_TIMEOUT; // 30 sec
             bookingCounterTimer.schedule(new TimerTask() {
                 @Override
                 public void run() {
