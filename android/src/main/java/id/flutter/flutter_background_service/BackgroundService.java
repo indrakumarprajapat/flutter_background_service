@@ -112,6 +112,7 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
     public static String tripType;
     public static String tpType;
     public static String customerId = "0";
+    final String ENV_PREFIX = "s";
 
     {
         topicList = new HashSet<String>();
@@ -250,15 +251,15 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
             locUpdatePayload = locUpdatePayload.replaceAll("D_CURRENT_LOC",
                     String.valueOf(location.getLatitude()) + ',' + String.valueOf(location.getLongitude()));
             locUpdatePayload = locUpdatePayload.replaceAll("LOC_BEARING", String.valueOf(location.getBearing()));
-            if (appState == "3" || appState == "5") {
+            if (appState == "6" || appState == "12") {
                 String locUpdateTopicOnride = getLocUpdateTopicOnRide(this);
                 if (!locUpdateTopicOnride.isEmpty()) {
-                    publishMessage(locUpdateTopicOnride, locUpdatePayload);
+                    publishMessage(ENV_PREFIX+"/"+locUpdateTopicOnride, locUpdatePayload);
                 }
             } else {
                 String locUpdateTopicOnline = getLocUpdateTopicOnline(this);
                 if (!locUpdateTopicOnline.isEmpty()) {
-                    publishMessage(locUpdateTopicOnline, locUpdatePayload);
+                    publishMessage(ENV_PREFIX+"/"+locUpdateTopicOnline, locUpdatePayload);
                 }
             }
         } catch (Exception e) {
@@ -680,8 +681,8 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
 
                         if (tpType == "4" || tpType == "5") {
                             // This is for portal
-                            publishMessage("rd/rq/ak/ap/"+rideReferenceNo, passpay);
-                            publishMessage("rd/rq/ak/"+rideReferenceNo, passpay);
+                            publishMessage(ENV_PREFIX+"/"+"rd/rq/ak/ap/"+rideReferenceNo, passpay);
+                            publishMessage(ENV_PREFIX+"/"+"rd/rq/ak/"+rideReferenceNo, passpay);
                             try {
                                 PassRideRequest passRideRequest = new PassRideRequest();
                                 passRideRequest.reference_number = rideReferenceNo;
@@ -706,7 +707,7 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
                             }
                         } else {
                             //sending to customer mobile app
-                            publishMessage("rd/rq/ak/"+rideReferenceNo, passpay);
+                            publishMessage(ENV_PREFIX+"/"+"rd/rq/ak/"+rideReferenceNo, passpay);
                         }
                     }
                     @Override
@@ -721,7 +722,6 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
     }
 
     void handleSubscriptionResponse() {
-        final String ENV_PREFIX = "s";
         hive_client.publishes(MqttGlobalPublishFilter.ALL,
                 mqtt3Publish -> {
                     try {
@@ -778,7 +778,7 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
     void publishMessage(String topicName, String message) {
         String top = topicName.replaceAll("=", "/");
         try {
-            if (top.startsWith("rd/rq/ak/")) {
+            if (top.startsWith(ENV_PREFIX+"/"+"rd/rq/ak/")) {
                 String[] parts = message.split("#");
                 if (parts[0] == "RQAA") {
                     //TODO Stop Sound
