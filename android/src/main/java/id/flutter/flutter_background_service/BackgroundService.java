@@ -785,6 +785,7 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
                     bookingCounterTimer.cancel();
                     bookingCounterTimer = null;
                     if (finalMediaPlayer != null) {
+                        finalMediaPlayer.stop();
                         finalMediaPlayer.release();
                         finalMediaPlayer = null;
                     }
@@ -793,6 +794,7 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
                     bookingCounterTimer.cancel();
                     bookingCounterTimer = null;
                     if (finalMediaPlayer != null) {
+                        finalMediaPlayer.stop();
                         finalMediaPlayer.release();
                         finalMediaPlayer = null;
                     }
@@ -1039,12 +1041,15 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
                     }
                 } catch (Exception ex) {
                     if (finalMediaPlayer != null) {
+                        finalMediaPlayer.stop();
                         finalMediaPlayer.release();
                         updateNotificationInfo();
                         finalMediaPlayer = null;
                     }
                 }
-            } else if (notificationType == NotificationType.BOOKING_CANCELLED) {
+            }
+
+            else if (notificationType == NotificationType.BOOKING_CANCELLED) {
                 NotificationCompat.Builder builder = new NotificationCompat.Builder(this, "FOREGROUND_DEFAULT")
                         .setSmallIcon(R.mipmap.ic_launcher)
                         .setContentTitle("Booking Cancelled")
@@ -1052,6 +1057,8 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
                         .setPriority(NotificationCompat.PRIORITY_DEFAULT)
                         .addAction(R.drawable.ic_open_app, getString(R.string.openapp), pi);
                 startForeground(99778, builder.build());
+
+
 
             } else if (notificationType == NotificationType.PAYMENT_DONE) {
                 NotificationCompat.Builder builder = new NotificationCompat.Builder(this, "FOREGROUND_DEFAULT")
