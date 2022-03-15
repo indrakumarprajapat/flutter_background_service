@@ -115,7 +115,7 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
     final String ENV_PREFIX = "s";
 
     {
-        topicList = new HashSet<String>();
+        topicList = new HashSet<>();
     }
 
     synchronized private static PowerManager.WakeLock getLock(Context context) {
@@ -303,14 +303,10 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
                         currentLocation.put("responseData", "CurrentLocationData");
                         currentLocation.put("CurrentLocation", location.toString());
                         localBroadcastManager(currentLocation, ">>> BGS CurrentLoc ", "broadcast getCurrentLocation");
-
-
                     } catch (JSONException e) {
                         e.printStackTrace();
                     }
-
                 }
-
             });
 
         } catch (SecurityException securityException) {
@@ -320,9 +316,6 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
     }
 
     private void stopTracking() {
-//        if (lockStatic.isHeld() == true) {
-//            lockStatic.release();
-//        }
         Log.d(TAG, "Removing location updates");
         try {
             fusedLocationProviderClient.removeLocationUpdates(locationCallback);
@@ -440,11 +433,8 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
         enqueue(this);
         runService();
         initializeConnection();
-
         getLock(getApplicationContext()).acquire();
-
 //      monitorNetwork();
-
         return START_STICKY;
     }
 
@@ -548,9 +538,7 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
             mqData.put("responseData", "connected");
             if (methodChannel != null) {
                 try {
-
                     localBroadcastManager(mqData, ">>> BGS onMqttConnected", "sent onMqttConnected is connected");
-
                 } catch (Exception e) {
                     e.printStackTrace();
                 }
@@ -784,26 +772,8 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
         try {
             if (top.startsWith(ENV_PREFIX + "/" + "rd/rq/ak/")) {
                 String[] parts = message.split("#");
-                if (parts[0] == "RQAA") {
-                    //TODO Stop Sound
-                    bookingCounterTimer.cancel();
-                    bookingCounterTimer = null;
-                    if (finalMediaPlayer != null) {
-                        finalMediaPlayer.stop();
-                        finalMediaPlayer.release();
-                        finalMediaPlayer = null;
-                    }
-                    isBookingTimerCancelled = true;
-                } else if (parts[0] == "RQAP") {
-                    //TODO Stop Sound
-                    bookingCounterTimer.cancel();
-                    bookingCounterTimer = null;
-                    if (finalMediaPlayer != null) {
-                        finalMediaPlayer.stop();
-                        finalMediaPlayer.release();
-                        finalMediaPlayer = null;
-                    }
-                    isBookingTimerCancelled = true;
+                if (parts[0] == "RQAA" || parts[0] == "RQAP") {
+                    resetBookingCounterTimer();
                 }
             }
         } catch (Exception e) {
@@ -814,6 +784,25 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
                 .payload(message.getBytes())
                 .qos(MqttQos.EXACTLY_ONCE)
                 .send();
+    }
+
+    void resetBookingCounterTimer() {
+        stopBookingSound();
+        bookingCounterTimer.cancel();
+        bookingCounterTimer = null;
+        isBookingTimerCancelled = true;
+    }
+
+    void stopBookingSound() {
+        try {
+            if (finalMediaPlayer != null) {
+                finalMediaPlayer.stop();
+                finalMediaPlayer.release();
+                finalMediaPlayer = null;
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
     }
 
     public void receiveData(JSONObject data) {
@@ -830,6 +819,8 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
                 } else if (action.equals("mqUnSubscribeTopic")) {
                     String topic = data.getString("topic");
                     unSubscribeTopic(topic);
+                } else if (action.equals("stopBookingSound")) {
+                    stopBookingSound();
                 } else if (action.equals("setDriverDetails")) {
                     String driverId = data.getString("driver_id");
                     String apiToken = data.getString("api_token");
@@ -854,6 +845,7 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
             }
         }
     }
+
 
     @Override
     public void onMethodCall(@NonNull MethodCall call, @NonNull MethodChannel.Result result) {
@@ -930,37 +922,6 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
                 return;
             }
 
-            if (method.equalsIgnoreCase("mqPublishMessage")) {
-                JSONObject arg = (JSONObject) call.arguments;
-                if (arg.has("topic")) {
-                    String topic = arg.getString("topic");
-                    String payload = arg.getString("payload");
-                    result.success(true);
-                    publishMessage(topic, payload);
-                }
-                return;
-            }
-
-            if (method.equalsIgnoreCase("mqSubscribeTopic")) {
-                JSONObject arg = (JSONObject) call.arguments;
-                if (arg.has("topic")) {
-                    String topic = arg.getString("topic");
-                    result.success(true);
-                    subscribeTopic(topic);
-                }
-                return;
-            }
-
-            if (method.equalsIgnoreCase("mqUnSubscribeTopic")) {
-                JSONObject arg = (JSONObject) call.arguments;
-                if (arg.has("topic")) {
-                    String topic = arg.getString("topic");
-                    result.success(true);
-                    unSubscribeTopic(topic);
-                }
-                return;
-            }
-
         } catch (JSONException e) {
             Log.e(TAG, e.getMessage());
             e.printStackTrace();
@@ -1012,6 +973,7 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
             } else {
                 pi = PendingIntent.getActivity(BackgroundService.this, 99778, intent, PendingIntent.FLAG_CANCEL_CURRENT);
             }
+
             if (notificationType == NotificationType.BOOKING_REQUEST) {
 
                 NotificationCompat.Builder builder = new NotificationCompat.Builder(this, "FOREGROUND_DEFAULT")
@@ -1042,12 +1004,9 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
                         });
                     }
                 } catch (Exception ex) {
-                    if (finalMediaPlayer != null) {
-                        finalMediaPlayer.stop();
-                        finalMediaPlayer.release();
-                        updateNotificationInfo();
-                        finalMediaPlayer = null;
-                    }
+                    stopBookingSound();
+                    updateNotificationInfo();
+
                 }
             } else if (notificationType == NotificationType.BOOKING_CANCELLED) {
                 NotificationCompat.Builder builder = new NotificationCompat.Builder(this, "FOREGROUND_DEFAULT")
@@ -1059,15 +1018,12 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
                 startForeground(99778, builder.build());
 
                 try {
-                    if (finalMediaPlayer != null) {
-                        finalMediaPlayer.stop();
-                        finalMediaPlayer.release();
-                        finalMediaPlayer = null;
-                        bookingCounterTimer.cancel();
-                        bookingCounterTimer = null;
-                        isBookingTimerCancelled = true;
-                    }
-                }catch (Exception e){
+                    stopBookingSound();
+                    bookingCounterTimer.cancel();
+                    bookingCounterTimer = null;
+                    isBookingTimerCancelled = true;
+
+                } catch (Exception e) {
                     e.printStackTrace();
                 }
 

@@ -124,8 +124,8 @@ public class FlutterBackgroundServicePlugin extends BroadcastReceiver implements
                 String apiToken = arg.getString("api_token");
 
                 configure(context, callbackHandle, isForeground, isServiceStart, autoStartOnBoot, serverHost, serverPort,
-                        username, password, clientId,setInterval, setFastestInterval, setPriority ,
-                        driverId,apiToken);
+                        username, password, clientId, setInterval, setFastestInterval, setPriority,
+                        driverId, apiToken);
 
                 if (autoStartOnBoot && isServiceStart) {
                     start();
@@ -182,7 +182,8 @@ public class FlutterBackgroundServicePlugin extends BroadcastReceiver implements
                 }
                 result.success(true);
                 return;
-            } if (method.equalsIgnoreCase("getCurrentLocation")) {
+            }
+            if (method.equalsIgnoreCase("getCurrentLocation")) {
                 for (FlutterBackgroundServicePlugin plugin : _instances) {
                     if (plugin.service != null) {
                         Log.d(TAG, "onMethodCall >>> get Current location is called");
@@ -211,6 +212,17 @@ public class FlutterBackgroundServicePlugin extends BroadcastReceiver implements
                     if (plugin.service != null) {
                         Log.d(TAG, "onMethodCall >>> mqUnSubscribeTopic is called with plugin.service not null ");
 
+                        plugin.service.receiveData((JSONObject) call.arguments);
+                        break;
+                    }
+                }
+                result.success(true);
+                return;
+            }
+            if (method.equalsIgnoreCase("stopBookingSound")) {
+                for (FlutterBackgroundServicePlugin plugin : _instances) {
+                    if (plugin.service != null) {
+                        Log.d(TAG, "onMethodCall >>> stopBookingSound >>>");
                         plugin.service.receiveData((JSONObject) call.arguments);
                         break;
                     }
