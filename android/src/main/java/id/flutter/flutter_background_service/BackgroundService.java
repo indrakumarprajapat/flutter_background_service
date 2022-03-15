@@ -254,12 +254,12 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
             if (appState == "6" || appState == "12") {
                 String locUpdateTopicOnride = getLocUpdateTopicOnRide(this);
                 if (!locUpdateTopicOnride.isEmpty()) {
-                    publishMessage(ENV_PREFIX+"/"+locUpdateTopicOnride, locUpdatePayload);
+                    publishMessage(ENV_PREFIX + "/" + locUpdateTopicOnride, locUpdatePayload);
                 }
             } else {
                 String locUpdateTopicOnline = getLocUpdateTopicOnline(this);
                 if (!locUpdateTopicOnline.isEmpty()) {
-                    publishMessage(ENV_PREFIX+"/"+locUpdateTopicOnline, locUpdatePayload);
+                    publishMessage(ENV_PREFIX + "/" + locUpdateTopicOnline, locUpdatePayload);
                 }
             }
         } catch (Exception e) {
@@ -581,11 +581,12 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
     Timer bookingCounterTimer = null;
     static final int PASS_TIMEOUT = 30;
     static int timerCurrentTick = PASS_TIMEOUT;
+    static boolean isBookingTimerCancelled = false;
 
     private void startBookingStartProcess(String payload) {
         messageOnNewTrip = payload;
         try {
-            String[]  parts = payload.split("#");
+            String[] parts = payload.split("#");
             String[] valuesPart1 = parts[1].split("|");
             String[] valuesPart3 = parts[3].split("|");
             // Trip Type coming from Customer Request
@@ -593,12 +594,13 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
             tripType = parts[5];
             customerId = valuesPart1[0];
             tpType = valuesPart3[1];
-        }catch (Exception e){
+        } catch (Exception e) {
             e.printStackTrace();
         }
 
         if (bookingCounterTimer == null) {
             bookingCounterTimer = new Timer();
+            isBookingTimerCancelled = false;
             timerCurrentTick = PASS_TIMEOUT; // 30 sec
             bookingCounterTimer.schedule(new TimerTask() {
                 @Override
@@ -612,10 +614,10 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
                     } catch (Exception e) {
                         e.printStackTrace();
                     }
-                    if (timerCurrentTick <= 0) {
+                    if (timerCurrentTick <= 0 && !isBookingTimerCancelled) {
                         bookingCounterTimer.cancel();
                         bookingCounterTimer = null;
-                        // TODO call auto pass
+                        // call auto pass
                         autoPassTheBooking();
                     }
                 }
@@ -624,7 +626,7 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
     }
 
     @SuppressLint("NewApi")
-    String getPassBookingPayload(String driverId, String messageOnNewTrip, String otp){
+    String getPassBookingPayload(String driverId, String messageOnNewTrip, String otp) {
         //PART_1 : Customer Detail
         //PART_2 : Driver Detail
         //PART_3 : Trip Details
@@ -647,7 +649,7 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
         valuesPart3.add(formattedDate); // D_ID
         return "RQAP#" + parts[1] +
                 "#" +
-                String.join("|",valuesPart3)+
+                String.join("|", valuesPart3) +
                 "#" +
                 parts[3] +
                 "#0";
@@ -676,18 +678,18 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
                         unSubscribeTopic("rd/rq/cl/" + rideReferenceNo);
                         Random rand = new Random();
                         String otp = String.format("%04d", rand.nextInt(10000));
-                        messageOnNewTrip = messageOnNewTrip.replaceAll("????", otp);
+                        messageOnNewTrip = messageOnNewTrip.replaceAll("=OTP=", otp);
                         String passpay = getPassBookingPayload(driverId, messageOnNewTrip, otp);
 
                         if (tpType == "4" || tpType == "5") {
                             // This is for portal
-                            publishMessage(ENV_PREFIX+"/"+"rd/rq/ak/ap/"+rideReferenceNo, passpay);
-                            publishMessage(ENV_PREFIX+"/"+"rd/rq/ak/"+rideReferenceNo, passpay);
+                            publishMessage(ENV_PREFIX + "/" + "rd/rq/ak/ap/" + rideReferenceNo, passpay);
+                            publishMessage(ENV_PREFIX + "/" + "rd/rq/ak/" + rideReferenceNo, passpay);
                             try {
                                 PassRideRequest passRideRequest = new PassRideRequest();
                                 passRideRequest.reference_number = rideReferenceNo;
-                                passRideRequest.user_id_fk = Integer.parseInt(customerId != "" ? customerId : "0") ; // customerId
-                                passRideRequest.from_latitude =  currentLocation.getLatitude();
+                                passRideRequest.user_id_fk = Integer.parseInt(customerId != "" ? customerId : "0"); // customerId
+                                passRideRequest.from_latitude = currentLocation.getLatitude();
                                 passRideRequest.from_longitude = currentLocation.getLongitude();
                                 passRideRequest.trip_booking_type = "Pass";
                                 ApiEndpoints apiEndpoints = RetrofitClientInstance.getRetrofitInstance(token).create(ApiEndpoints.class);
@@ -697,6 +699,7 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
                                     public void onResponse(Call<DriverLocation> call, Response<DriverLocation> response) {
                                         Log.d(">>>ApiCall-PassRide>", response.toString());
                                     }
+
                                     @Override
                                     public void onFailure(Call<DriverLocation> call, Throwable t) {
                                         Log.d(">>> Error-Pass > ", t.getMessage());
@@ -707,9 +710,10 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
                             }
                         } else {
                             //sending to customer mobile app
-                            publishMessage(ENV_PREFIX+"/"+"rd/rq/ak/"+rideReferenceNo, passpay);
+                            publishMessage(ENV_PREFIX + "/" + "rd/rq/ak/" + rideReferenceNo, passpay);
                         }
                     }
+
                     @Override
                     public void onFailure(Call<DriverLocation> call, Throwable t) {
                         Log.d(">>> ApiCall-Failed > ", t.getMessage());
@@ -778,7 +782,7 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
     void publishMessage(String topicName, String message) {
         String top = topicName.replaceAll("=", "/");
         try {
-            if (top.startsWith(ENV_PREFIX+"/"+"rd/rq/ak/")) {
+            if (top.startsWith(ENV_PREFIX + "/" + "rd/rq/ak/")) {
                 String[] parts = message.split("#");
                 if (parts[0] == "RQAA") {
                     //TODO Stop Sound
@@ -789,6 +793,7 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
                         finalMediaPlayer.release();
                         finalMediaPlayer = null;
                     }
+                    isBookingTimerCancelled = true;
                 } else if (parts[0] == "RQAP") {
                     //TODO Stop Sound
                     bookingCounterTimer.cancel();
@@ -798,6 +803,7 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
                         finalMediaPlayer.release();
                         finalMediaPlayer = null;
                     }
+                    isBookingTimerCancelled = true;
                 }
             }
         } catch (Exception e) {
@@ -1022,22 +1028,18 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
 
                 finalMediaPlayer = MediaPlayer.create(this, R.raw.booking);
                 try {
-                    if (finalMediaPlayer != null) {//check if it's been already initialized.
-                        new Timer().schedule(new TimerTask() {
-                            @Override
-                            public void run() {
-                                finalMediaPlayer.start();
-                                finalMediaPlayer.setOnCompletionListener(mp -> {
-                                    updateNotificationInfo();
-                                    try {
-                                        finalMediaPlayer.release();
-                                        finalMediaPlayer = null;
-                                    } catch (Exception e) {
-                                        e.printStackTrace();
-                                    }
-                                });
+                    if (finalMediaPlayer != null) {
+                        //check if it's been already initialized.
+                        finalMediaPlayer.start();
+                        finalMediaPlayer.setOnCompletionListener(mp -> {
+                            updateNotificationInfo();
+                            try {
+                                finalMediaPlayer.release();
+                                finalMediaPlayer = null;
+                            } catch (Exception e) {
+                                e.printStackTrace();
                             }
-                        }, 0);
+                        });
                     }
                 } catch (Exception ex) {
                     if (finalMediaPlayer != null) {
@@ -1047,9 +1049,7 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
                         finalMediaPlayer = null;
                     }
                 }
-            }
-
-            else if (notificationType == NotificationType.BOOKING_CANCELLED) {
+            } else if (notificationType == NotificationType.BOOKING_CANCELLED) {
                 NotificationCompat.Builder builder = new NotificationCompat.Builder(this, "FOREGROUND_DEFAULT")
                         .setSmallIcon(R.mipmap.ic_launcher)
                         .setContentTitle("Booking Cancelled")
@@ -1058,7 +1058,18 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
                         .addAction(R.drawable.ic_open_app, getString(R.string.openapp), pi);
                 startForeground(99778, builder.build());
 
-
+                try {
+                    if (finalMediaPlayer != null) {
+                        finalMediaPlayer.stop();
+                        finalMediaPlayer.release();
+                        finalMediaPlayer = null;
+                        bookingCounterTimer.cancel();
+                        bookingCounterTimer = null;
+                        isBookingTimerCancelled = true;
+                    }
+                }catch (Exception e){
+                    e.printStackTrace();
+                }
 
             } else if (notificationType == NotificationType.PAYMENT_DONE) {
                 NotificationCompat.Builder builder = new NotificationCompat.Builder(this, "FOREGROUND_DEFAULT")
