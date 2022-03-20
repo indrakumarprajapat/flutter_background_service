@@ -31,6 +31,8 @@ import androidx.core.app.NotificationCompat;
 import androidx.localbroadcastmanager.content.LocalBroadcastManager;
 
 
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.android.gms.location.FusedLocationProviderClient;
 import com.google.android.gms.location.LocationCallback;
 import com.google.android.gms.location.LocationRequest;
@@ -46,9 +48,12 @@ import com.hivemq.client.mqtt.mqtt3.Mqtt3Client;
 import org.json.JSONException;
 import org.json.JSONObject;
 
+import java.io.ByteArrayOutputStream;
+import java.lang.reflect.Type;
 import java.text.DateFormat;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Date;
 import java.util.HashSet;
 import java.util.List;
@@ -195,40 +200,108 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
         }
     }
 
+    ObjectMapper objectMapper = new ObjectMapper();
+
     private void onNewLocation(Location location) {
-        Log.d(TAG, "New location:  onNewLocation");
         this.currentLocation = location;
         updateNotificationInfo(location.toString());
         JSONObject mqData = new JSONObject();
 
         try {
             mqData.put("responseData", "LocationData");
-            String locDetail = location.getLatitude() + "|" +
-                    location.getLongitude() + "|" +
-                    location.getAltitude() + "|" +
-                    location.getAccuracy() + "|" +
-                    location.getBearing() + "|" +
-                    location.getSpeed() + "|" +
-                    location.getProvider();
-            mqData.put("LocationValue", locDetail);
+            StringBuilder sb = new StringBuilder();
+            sb.append(location.getLatitude());
+            sb.append("|");
+            sb.append(location.getLongitude());
+            sb.append("|");
+            sb.append(location.getAltitude());
+            sb.append("|");
+            sb.append(location.getAccuracy());
+            sb.append("|");
+            sb.append(location.getBearing());
+            sb.append("|");
+            sb.append(location.getSpeed());
+            sb.append("|");
+            sb.append(location.getProvider());
+            mqData.put("LocationValue", sb.toString());
         } catch (JSONException e) {
+            e.printStackTrace();
+        }
+        String appState = getAppStateValue(this);
+
+        try {
+            String locUpdatePayload = getLocUpdatePayload(this);
+            locUpdatePayload = locUpdatePayload.replaceFirst("D_CURRENT_LOC",
+                    String.valueOf(location.getLatitude()) + ',' + location.getLongitude());
+            locUpdatePayload = locUpdatePayload.replaceFirst("LOC_BEARING", String.valueOf(location.getBearing()));
+            if (appState.equals("6") || appState.equals("12")) {
+                String locUpdateTopicOnride = getLocUpdateTopicOnRide(this);
+                if (!locUpdateTopicOnride.isEmpty()) {
+                    publishMessage(ENV_PREFIX + "/" + locUpdateTopicOnride, locUpdatePayload);
+                }
+            } else {
+                String locUpdateTopicOnline = getLocUpdateTopicOnline(this);
+                if (!locUpdateTopicOnline.isEmpty()) {
+                    publishMessage(ENV_PREFIX + "/" + locUpdateTopicOnline, locUpdatePayload);
+                }
+            }
+        } catch (Exception e) {
             e.printStackTrace();
         }
         if (methodChannel != null) {
             try {
+                String latLngStrUpdated = null;
+
+                if (appState.equals("12")) {
+                    LatLng newLatLng = new LatLng();
+                    newLatLng.lat = location.getLatitude();
+                    newLatLng.lng = location.getLongitude();
+                    List<LatLng> latLngList = null;
+                    try {
+                        String latLngStr = getLatLngList(this);
+                        if (!latLngStr.isEmpty()) {
+//                            latLngList = Arrays.asList(objectMapper.readValue(latLngStr, LatLng[].class));
+                            latLngList = objectMapper.readValue(latLngStr, new TypeReference<List<LatLng>>(){});
+                        }else{
+                            latLngList = new ArrayList<>();
+                        }
+                    } catch (Exception e) {
+                        latLngList = new ArrayList<>();
+                        e.printStackTrace();
+                    }
+                    try {
+                        latLngList.add(newLatLng);
+                        final ByteArrayOutputStream out = new ByteArrayOutputStream();
+                        objectMapper.writeValue(out, latLngList);
+                        final byte[] data = out.toByteArray();
+                        latLngStrUpdated = new String(data);
+                    } catch (Exception e) {
+                        e.printStackTrace();
+                    }
+                } else {
+                    try {
+                        latLngStrUpdated = "[]";
+                    } catch (Exception e) {
+                        e.printStackTrace();
+                    }
+                }
+                try {
+                    mqData.put("RideLatLngList", latLngStrUpdated);
+                    setLatLngList(this, latLngStrUpdated);
+                }catch (Exception e){
+                    e.printStackTrace();
+                }
                 localBroadcastManager(mqData, ">>>BGS onNewLocation", "Send new location to flutter");
             } catch (Exception e) {
                 e.printStackTrace();
             }
         }
-
         try {
             /*Create handle for the RetrofitInstance interface*/
             String token = getApiTokenValue(this);
             if (token != null && token.length() > 10) {
                 ApiEndpoints apiEndpoints = RetrofitClientInstance.getRetrofitInstance(token).create(ApiEndpoints.class);
-                Call<DriverLocation> call = apiEndpoints.updateDriverLocation(new DriverLocation(),
-                        String.valueOf(location.getLatitude()), String.valueOf(location.getLongitude()),
+                Call<DriverLocation> call = apiEndpoints.updateDriverLocation(null, location.getLatitude(), location.getLongitude(),
                         getDriverId(this));
                 call.enqueue(new Callback<DriverLocation>() {
                     @Override
@@ -241,26 +314,6 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
                         Log.d(">>> ApiCall-Failed > ", t.getMessage());
                     }
                 });
-            }
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
-        try {
-            String appState = getAppStateValue(this);
-            String locUpdatePayload = getLocUpdatePayload(this);
-            locUpdatePayload = locUpdatePayload.replaceAll("D_CURRENT_LOC",
-                    String.valueOf(location.getLatitude()) + ',' + String.valueOf(location.getLongitude()));
-            locUpdatePayload = locUpdatePayload.replaceAll("LOC_BEARING", String.valueOf(location.getBearing()));
-            if (appState == "6" || appState == "12") {
-                String locUpdateTopicOnride = getLocUpdateTopicOnRide(this);
-                if (!locUpdateTopicOnride.isEmpty()) {
-                    publishMessage(ENV_PREFIX + "/" + locUpdateTopicOnride, locUpdatePayload);
-                }
-            } else {
-                String locUpdateTopicOnline = getLocUpdateTopicOnline(this);
-                if (!locUpdateTopicOnline.isEmpty()) {
-                    publishMessage(ENV_PREFIX + "/" + locUpdateTopicOnline, locUpdatePayload);
-                }
             }
         } catch (Exception e) {
             e.printStackTrace();
@@ -1006,7 +1059,15 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
                 } catch (Exception ex) {
                     stopBookingSound();
                     updateNotificationInfo();
-
+                }
+                try {
+//                    final ByteArrayOutputStream out = new ByteArrayOutputStream();
+//                    objectMapper.writeValue(out, new ArrayList<>());
+//                    final byte[] data = out.toByteArray();
+                    String emptyListStr = "[]"; // new String(data)
+                    setLatLngList(this, emptyListStr);
+                } catch (Exception e) {
+                    e.printStackTrace();
                 }
             } else if (notificationType == NotificationType.BOOKING_CANCELLED) {
                 NotificationCompat.Builder builder = new NotificationCompat.Builder(this, "FOREGROUND_DEFAULT")
@@ -1222,5 +1283,19 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
         return pref.getString("api_token", "");
     }
 
+    public void setLatLngList(Context context, String latLngList) {
+        SharedPreferences pref = context.getSharedPreferences("id.flutter.background_service", MODE_PRIVATE);
+        pref.edit().putString("ridelatlnglist", latLngList).apply();
+    }
 
+    public static String getLatLngList(Context context) {
+        SharedPreferences pref = context.getSharedPreferences("id.flutter.background_service", MODE_PRIVATE);
+        return pref.getString("ridelatlnglist", "");
+    }
+
+}
+
+class LatLng {
+    public double lat;
+    public double lng;
 }
