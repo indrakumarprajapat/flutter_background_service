@@ -881,6 +881,8 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
                     unSubscribeTopic(topic);
                 } else if (action.equals("stopBookingSound")) {
                     stopBookingSound();
+                } else if (action.equals("acceptBooking")) {
+                    resetBookingCounterTimer();
                 } else if (action.equals("setDriverDetails")) {
                     String driverId = data.getString("driver_id");
                     String apiToken = data.getString("api_token");

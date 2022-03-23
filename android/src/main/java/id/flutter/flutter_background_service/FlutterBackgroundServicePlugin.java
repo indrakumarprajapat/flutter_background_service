@@ -230,6 +230,17 @@ public class FlutterBackgroundServicePlugin extends BroadcastReceiver implements
                 result.success(true);
                 return;
             }
+            if (method.equalsIgnoreCase("acceptBooking")) {
+                for (FlutterBackgroundServicePlugin plugin : _instances) {
+                    if (plugin.service != null) {
+                        Log.d(TAG, "onMethodCall >>> acceptBooking >>>");
+                        plugin.service.receiveData((JSONObject) call.arguments);
+                        break;
+                    }
+                }
+                result.success(true);
+                return;
+            }
             if (method.equalsIgnoreCase("isServiceRunning")) {
                 ActivityManager manager = (ActivityManager) context.getSystemService(Context.ACTIVITY_SERVICE);
                 for (ActivityManager.RunningServiceInfo service : manager.getRunningServices(Integer.MAX_VALUE)) {
