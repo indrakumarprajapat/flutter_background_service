@@ -278,13 +278,14 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
                     } catch (Exception e) {
                         e.printStackTrace();
                     }
-                } else {
-                    try {
-                        latLngStrUpdated = "[]";
-                    } catch (Exception e) {
-                        e.printStackTrace();
-                    }
                 }
+//                else {
+//                    try {
+//                        latLngStrUpdated = "[]";
+//                    } catch (Exception e) {
+//                        e.printStackTrace();
+//                    }
+//                }
                 try {
                     mqData.put("RideLatLngList", latLngStrUpdated);
                     setLatLngList(this, latLngStrUpdated);
@@ -628,8 +629,8 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
         messageOnNewTrip = payload;
         try {
             String[] parts = payload.split("#");
-            String[] valuesPart1 = parts[1].split("|");
-            String[] valuesPart3 = parts[3].split("|");
+            String[] valuesPart1 = parts[1].split("\\|");
+            String[] valuesPart3 = parts[3].split("\\|");
             // Trip Type coming from Customer Request
             rideReferenceNo = valuesPart3[0];
             tripType = parts[5];
@@ -828,6 +829,12 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
                 if (parts[0] == "RQAA" || parts[0] == "RQAP") {
                     resetBookingCounterTimer();
                 }
+            }else if (top.startsWith(ENV_PREFIX + "/" + "rd/cr/")) {
+                String[] parts = message.split("#");
+                if (parts[0] == "RDCT") {
+                    String emptyListStr = "[]"; // new String(data)
+                    setLatLngList(this, emptyListStr);
+                }
             }
         } catch (Exception e) {
             e.printStackTrace();
@@ -887,6 +894,8 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
                     setAppStateValueAndTopics(appStateValue, locUpdateTopicOnline, locUpdateTopicOnRide, locUpdatePayload);
                 } else if (action.equals("getCurrentLocation")) {
                     getCurrentLocation();
+                } else if (action.equals("getRideLatLngListValue")) {
+                    //TODO
                 }
             } catch (Exception e) {
                 e.printStackTrace();
