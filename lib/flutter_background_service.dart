@@ -312,6 +312,23 @@ class FlutterBackgroundService {
     });
   }
 
+  void acceptBooking() async {
+    if (!(await (isServiceRunning()))) {
+      dispose();
+      return;
+    }
+    if (_isFromInitialization) {
+      _mainChannel.invokeMethod("acceptBooking", {
+        "action": "acceptBooking",
+      });
+      return;
+    }
+    _backgroundChannel.invokeMethod("stopBookingSound", {
+      "action": "stopBookingSound",
+    });
+  }
+
+
   // Set Foreground Notification Information
   // Only available when foreground mode is true
   void setNotificationInfo({String? title, String? content}) {
