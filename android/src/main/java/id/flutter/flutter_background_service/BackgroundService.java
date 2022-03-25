@@ -241,9 +241,11 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
                 }
             } else {
                 String locUpdateTopicOnline = getLocUpdateTopicOnline(this);
-                if (!locUpdateTopicOnline.isEmpty()) {
-                    publishMessage(ENV_PREFIX + "/" + locUpdateTopicOnline, locUpdatePayload);
+                if (locUpdateTopicOnline.isEmpty()) {
+                    locUpdateTopicOnline =ENV_PREFIX + "/drivers_curr_loc/" + getDriverId(this) +"/newlocQoS";
                 }
+                publishMessage(ENV_PREFIX + "/" + locUpdateTopicOnline, locUpdatePayload);
+
             }
         } catch (Exception e) {
             e.printStackTrace();
@@ -1084,7 +1086,8 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
                 } catch (Exception e) {
                     e.printStackTrace();
                 }
-            } else if (notificationType == NotificationType.BOOKING_CANCELLED) {
+            }
+            else if (notificationType == NotificationType.BOOKING_CANCELLED) {
                 NotificationCompat.Builder builder = new NotificationCompat.Builder(this, "FOREGROUND_DEFAULT")
                         .setSmallIcon(R.mipmap.ic_launcher)
                         .setContentTitle("Booking Cancelled")
@@ -1103,7 +1106,8 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
                     e.printStackTrace();
                 }
 
-            } else if (notificationType == NotificationType.PAYMENT_DONE) {
+            }
+            else if (notificationType == NotificationType.PAYMENT_DONE) {
                 NotificationCompat.Builder builder = new NotificationCompat.Builder(this, "FOREGROUND_DEFAULT")
                         .setSmallIcon(R.mipmap.ic_launcher)
                         .setContentTitle("Payment Completed")
