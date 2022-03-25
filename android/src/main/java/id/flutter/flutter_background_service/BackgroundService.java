@@ -302,8 +302,12 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
             String token = getApiTokenValue(this);
             if (token != null && token.length() > 10) {
                 ApiEndpoints apiEndpoints = RetrofitClientInstance.getRetrofitInstance(token).create(ApiEndpoints.class);
-                Call<DriverLocation> call = apiEndpoints.updateDriverLocation(null, location.getLatitude(), location.getLongitude(),
+                Call<DriverLocation> call = apiEndpoints.updateDriverLocation(
+                        new DriverLocation(),
+                        location.getLatitude(),
+                        location.getLongitude(),
                         getDriverId(this));
+
                 call.enqueue(new Callback<DriverLocation>() {
                     @Override
                     public void onResponse(Call<DriverLocation> call, Response<DriverLocation> response) {
