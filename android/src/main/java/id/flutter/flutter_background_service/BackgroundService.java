@@ -191,6 +191,7 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
                 if (lastLocation != null) {
                     currentLocation = lastLocation;
                 } else {
+                    getLastLocation()
                     Log.d(TAG, "Failed to get location.");
                 }
             });

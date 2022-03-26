@@ -87,6 +87,7 @@ class FlutterBackgroundService {
   bool _isRunning = false;
   bool _isMainChannel = false;
 
+
   static const MethodChannel _backgroundChannel = const MethodChannel(
     'id.flutter/background_service_bg', JSONMethodCodec(),);
 
@@ -148,6 +149,8 @@ class FlutterBackgroundService {
 
       final service = FlutterBackgroundService();
       service._setupMain();
+      var usrMap = {"configure": "android"};
+      _streamController.sink.add(usrMap);
       final result = await _mainChannel.invokeMethod(
         "configure",
         {
@@ -221,7 +224,6 @@ class FlutterBackgroundService {
   // Send data from UI to Service, or from Service to UI
   void mqPublishMessage(String topic, String payload) async {
     if (!(await (isServiceRunning()))) {
-      dispose();
       return;
     }
     if (_isFromInitialization) {
@@ -242,7 +244,7 @@ class FlutterBackgroundService {
   // Send data from UI to Service, or from Service to UI
   void getCurrentLocation() async {
     if (!(await (isServiceRunning()))) {
-      dispose();
+      // dispose();
       return;
     }
     if (_isFromInitialization) {
@@ -260,7 +262,7 @@ class FlutterBackgroundService {
   // Send data from UI to Service, or from Service to UI
   void mqSubscribeTopic(String topic) async {
     if (!(await (isServiceRunning()))) {
-      dispose();
+      // dispose();
       return;
     }
     if (_isFromInitialization) {
@@ -279,7 +281,7 @@ class FlutterBackgroundService {
   // Send data from UI to Service, or from Service to UI
   void mqUnSubscribeTopic(String topic) async {
     if (!(await (isServiceRunning()))) {
-      dispose();
+      // dispose();
       return;
     }
     if (_isFromInitialization) {
@@ -298,7 +300,7 @@ class FlutterBackgroundService {
   // stop booking request sound on Accept and Pass
   void stopBookingSound() async {
     if (!(await (isServiceRunning()))) {
-      dispose();
+      // dispose();
       return;
     }
     if (_isFromInitialization) {
@@ -314,7 +316,7 @@ class FlutterBackgroundService {
 
   void acceptBooking() async {
     if (!(await (isServiceRunning()))) {
-      dispose();
+      // dispose();
       return;
     }
     if (_isFromInitialization) {
@@ -375,27 +377,14 @@ class FlutterBackgroundService {
       });
   }
 
-
-  StreamController<Map<String, dynamic>?> _streamController = StreamController
-      .broadcast();
+  StreamController<Map<String, dynamic>?> _streamController = StreamController.broadcast();
 
   Stream<Map<String, dynamic>?> get onDataReceived => _streamController.stream;
+
 
   void dispose() {
     _streamController.close();
   }
 
-  //
-  // Future<Stream<Map<String, dynamic>?>> getMqttResponseData() async {
-  //   try {
-  //     return _eventChannel.receiveBroadcastStream().map<Map<String, dynamic>?>((value) => value);
-  //   } on PlatformException catch (e) {
-  //     batteryLevel = "Failed to get battery level: '${e.message}'.";
-  //   }
-  // }
-
-
-  Stream<Map<String, dynamic>?> get onDataMqttReceived =>
-      _eventChannel.receiveBroadcastStream().map<Map<String, dynamic>?>((
-          value) => value);
+  Stream<Map<String, dynamic>?> get onDataMqttReceived => _eventChannel.receiveBroadcastStream().map<Map<String, dynamic>?>((value) => value);
 }
