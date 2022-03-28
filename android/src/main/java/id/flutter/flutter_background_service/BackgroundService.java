@@ -101,8 +101,8 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
     Mqtt3AsyncClient hive_client;
     private HashSet<String> topicList;
 
-    String notificationTitle = "Background Service";
-    String notificationContent = "Running";
+    String notificationTitle = "Boom Cabs Partner";
+    String notificationContent = "...";
     MediaPlayer finalMediaPlayer;
 
     private static final String LOCK_NAME = BackgroundService.class.getName() + ".Lock";
@@ -489,7 +489,7 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
                 .setAutoCancel(true)
                 .setOngoing(true)
                 .setContentTitle(notificationTitle)
-                .setContentText(location.toString())
+                .setContentText("Location Tracking On")
                 .setContentIntent(pi);
 
         startForeground(99778, mBuilder.build());
@@ -510,7 +510,7 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
 
         initializeConnection();
 
-//        getLock(getApplicationContext()).acquire();
+        getLock(getApplicationContext()).acquire();
 
 //      monitorNetwork();
         return START_STICKY;
@@ -922,6 +922,19 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
                     getCurrentLocation();
                 } else if (action.equals("getRideLatLngListValue")) {
                     //TODO
+                }else if (action.equals("stopService")) {
+                    isManuallyStopped = true;
+                    Intent intent = new Intent(this, WatchdogReceiver.class);
+                    PendingIntent pi;
+                    if (SDK_INT >= Build.VERSION_CODES.S) {
+                        pi = PendingIntent.getBroadcast(getApplicationContext(), 111, intent, PendingIntent.FLAG_CANCEL_CURRENT | PendingIntent.FLAG_MUTABLE);
+                    } else {
+                        pi = PendingIntent.getBroadcast(getApplicationContext(), 111, intent, PendingIntent.FLAG_CANCEL_CURRENT);
+                    }
+                    AlarmManager alarmManager = (AlarmManager) getSystemService(ALARM_SERVICE);
+                    alarmManager.cancel(pi);
+                    stopTracking();
+                    stopSelf();
                 }
             } catch (Exception e) {
                 e.printStackTrace();
