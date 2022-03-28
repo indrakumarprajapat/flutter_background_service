@@ -155,9 +155,12 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
     @Override
     public void onCreate() {
         super.onCreate();
+
+
         createNotificationChannel();
+
         notificationContent = "Preparing";
-        updateNotificationInfo();
+
 
         Log.d(">>> BGS onCreate()", "onCreate() is called");
 
@@ -170,11 +173,14 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
                 onNewLocation(locationResult.getLastLocation());
             }
         };
-
         createLocationRequest();
         getLastLocation();
-
         startTracking();
+
+
+        updateNotificationInfo();
+
+
     }
 
     // Location tracking >>>>>
@@ -425,6 +431,9 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
     }
 
     private void createNotificationChannel() {
+
+
+
         if (SDK_INT >= Build.VERSION_CODES.O) {
             CharSequence name = "Background Service";
             String description = "Executing process in background";
@@ -441,6 +450,8 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
     protected void updateNotificationInfo() {
         String packageName = getApplicationContext().getPackageName();
         Intent i = getPackageManager().getLaunchIntentForPackage(packageName);
+        i.setFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP);
+
 
         PendingIntent pi;
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
@@ -464,6 +475,7 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
     protected void updateNotificationInfo(String location) {
         String packageName = getApplicationContext().getPackageName();
         Intent i = getPackageManager().getLaunchIntentForPackage(packageName);
+        i.setFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP);
 
         PendingIntent pi;
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
@@ -491,10 +503,15 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
         Log.d(">>> BGS onStartCommand", "onStartCommand() is called");
 
         setManuallyStopped(false);
+
         enqueue(this);
+
         runService();
+
         initializeConnection();
-        getLock(getApplicationContext()).acquire();
+
+//        getLock(getApplicationContext()).acquire();
+
 //      monitorNetwork();
         return START_STICKY;
     }
