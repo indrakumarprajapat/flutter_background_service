@@ -6,6 +6,7 @@ import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
+import android.util.Log;
 
 import androidx.core.content.ContextCompat;
 
@@ -14,12 +15,16 @@ public class WatchdogReceiver extends BroadcastReceiver {
     public void onReceive(Context context, Intent intent) {
         SharedPreferences pref = context.getSharedPreferences("id.flutter.background_service", MODE_PRIVATE);
 //        boolean isServiceStart = pref.getBoolean("is_service_start",false);
-        if(!BackgroundService.isManuallyStopped(context)){
+        Log.d("BOOT_SERVICE >>> ","WatchdogReceiver");
+//        if(!BackgroundService.isManuallyStopped(context)){
             if (BackgroundService.isForegroundService(context)){
                 ContextCompat.startForegroundService(context, new Intent(context, BackgroundService.class));
+                Log.d("BOOT_SERVICE >>> ","ContextCompat.startForegroundService ");
             } else {
                 context.startService(new Intent(context, BackgroundService.class));
+                Log.d("BOOT_SERVICE >>> "," context.startService");
             }
-        }
+//        }
     }
 }
+

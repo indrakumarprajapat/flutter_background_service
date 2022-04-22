@@ -63,7 +63,6 @@ public class FlutterBackgroundServicePlugin extends BroadcastReceiver implements
 
     }
 
-
     private static void configure(Context context, long callbackHandleId, boolean isForeground, boolean isServiceStart, boolean autoStartOnBoot,
                                   String mqServerHost, int mqPort, String mqUsername, String mqPassword, String mqClientId,
                                   long setInterval, long setFastestInterval, int setPriority, String driverId, String apiToken) {
@@ -137,11 +136,18 @@ public class FlutterBackgroundServicePlugin extends BroadcastReceiver implements
                 return;
             }
 
-            if ("start".equals(method)) {
+            if ("start".equalsIgnoreCase(method)) {
                 start();
                 result.success(true);
                 Log.d(TAG, "onMethodCall >>> start is called");
 
+                for (FlutterBackgroundServicePlugin plugin : _instances) {
+                    if (plugin.service != null) {
+                        plugin.service.receiveData((JSONObject) call.arguments);
+                        Log.d(TAG, "onMethodCall >>> start is called with plugin.service not null ");
+                        break;
+                    }
+                }
                 return;
             }
 

@@ -127,13 +127,13 @@ class FlutterBackgroundService {
     return true;
   }
 
-  Future<bool> start() async {
+  Future<bool> start(Map<String, dynamic> data) async {
     if (!_isMainChannel) {
       throw Exception(
           'This method only allowed from UI. Please call configure() first.');
     }
 
-    final result = await _mainChannel.invokeMethod('start');
+    final result = await _mainChannel.invokeMethod('start',data);
     return result ?? false;
   }
 

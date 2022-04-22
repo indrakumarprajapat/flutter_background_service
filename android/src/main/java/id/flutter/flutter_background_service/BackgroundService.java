@@ -49,14 +49,12 @@ import org.json.JSONException;
 import org.json.JSONObject;
 
 import java.io.ByteArrayOutputStream;
-import java.lang.reflect.Type;
-import java.text.DateFormat;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Date;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Random;
 import java.util.Timer;
 import java.util.TimerTask;
@@ -100,10 +98,11 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
     private boolean isManuallyStopped = false;
     Mqtt3AsyncClient hive_client;
     private HashSet<String> topicList;
-
+    boolean isMqAlive = false;
     String notificationTitle = "Boom Cabs Partner";
     String notificationContent = "...";
     MediaPlayer finalMediaPlayer;
+    static boolean isDebug = false;
 
     private static final String LOCK_NAME = BackgroundService.class.getName() + ".Lock";
     private static volatile WakeLock lockStatic = null; // notice static
@@ -117,7 +116,8 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
     public static String tripType;
     public static String tpType;
     public static String customerId = "0";
-    final String ENV_PREFIX = "s";
+    final String ENV_PREFIX = "s"; // Stage
+//    final String ENV_PREFIX = "p"; // Production
 
     {
         topicList = new HashSet<>();
@@ -149,6 +149,38 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
 
         PendingIntent pIntent = PendingIntent.getBroadcast(context, 111, intent, PendingIntent.FLAG_UPDATE_CURRENT);
         AlarmManagerCompat.setAndAllowWhileIdle(manager, AlarmManager.RTC_WAKEUP, System.currentTimeMillis() + 5000, pIntent);
+//
+//        Intent intent = new Intent(context, WatchdogReceiver.class);
+//        intent.putExtra("crash", true);
+//        intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP
+//                | Intent.FLAG_ACTIVITY_CLEAR_TASK
+//                | Intent.FLAG_ACTIVITY_NEW_TASK);
+//        PendingIntent pendingIntent = PendingIntent.getActivity(context, 0, intent, PendingIntent.FLAG_ONE_SHOT);
+//        AlarmManager mgr = (AlarmManager) context.getSystemService(Context.ALARM_SERVICE);
+//        mgr.set(AlarmManager.RTC, System.currentTimeMillis() + 100, pendingIntent);
+//        mgr.setInexactRepeating(AlarmManager.RTC_WAKEUP,60000,90000,pendingIntent);
+
+
+//        Intent intent = new Intent(context, WatchdogReceiver.class);
+//        intent.setAction("FOO_ACTION");
+//        intent.putExtra("KEY_FOO_STRING", "Medium AlarmManager Demo");
+//
+//        AlarmManager alarmManager = (AlarmManager) context.getSystemService(Context.ALARM_SERVICE);
+//
+//        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+//            PendingIntent pIntent = PendingIntent.getBroadcast(context, 111, intent, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_MUTABLE);
+////            AlarmManagerCompat.setAndAllowWhileIdle(alarmManager, AlarmManager.RTC_WAKEUP, System.currentTimeMillis() + 5000, pIntent);
+//            long timeInterval = 120 * 1_000L;
+//            long alarmTime = System.currentTimeMillis() + 5_000L;
+//            alarmManager.setRepeating(AlarmManager.RTC_WAKEUP, alarmTime, timeInterval , pIntent);
+//            return;
+//        }
+//
+//        PendingIntent pIntent = PendingIntent.getBroadcast(context, 111, intent, PendingIntent.FLAG_UPDATE_CURRENT);
+//        AlarmManagerCompat.setAndAllowWhileIdle(alarmManager, AlarmManager.RTC_WAKEUP, System.currentTimeMillis() + 5000, pIntent);
+//        long timeInterval = 60 * 1_000L;
+//        long alarmTime = System.currentTimeMillis() + 5_000L;
+//        alarmManager.setRepeating(AlarmManager.RTC_WAKEUP, alarmTime, timeInterval , pIntent);
     }
 
     @RequiresApi(api = Build.VERSION_CODES.LOLLIPOP)
@@ -160,9 +192,6 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
         createNotificationChannel();
 
         notificationContent = "Preparing";
-
-
-        Log.d(">>> BGS onCreate()", "onCreate() is called");
 
         fusedLocationProviderClient = LocationServices.getFusedLocationProviderClient(this);
 
@@ -176,11 +205,37 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
         createLocationRequest();
         getLastLocation();
         startTracking();
-
-
+        periodicUpdateIsBgService();
         updateNotificationInfo();
 
+        //App Event Log
+        String className = new Throwable()
+                .getStackTrace()[0]
+                .getClassName();
+        String methodName = new Throwable()
+                .getStackTrace()[0]
+                .getMethodName();
+        int lineNumber = new Throwable()
+                .getStackTrace()[0]
+                .getLineNumber();
+        String title = "Bg Service Starting";
+        String data = "";
+        addAppEventLog(LogType.DEBUG, LogTag.SERVICE_STARTED, title, data,
+                className, methodName, lineNumber);
+    }
+    Timer infiniteTimer;
 
+    void periodicUpdateIsBgService() {
+        infiniteTimer = new Timer();
+        int PERIOD = 120;
+        infiniteTimer.schedule(new TimerTask() {
+            @Override
+            public void run() {
+                if(infiniteTimer != null){
+                    updateBgServiceStatus(true, false);
+                }
+            }
+        }, PERIOD * 1000, PERIOD * 1000);
     }
 
     // Location tracking >>>>>
@@ -198,12 +253,36 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
                     currentLocation = lastLocation;
                 } else {
                     getLastLocation();
-                    Log.d(TAG, "Failed to get location.");
+                    if (isDebug) {
+                        Log.d(TAG, "Failed to get location.");
+                    }
                 }
             });
 
-        } catch (SecurityException securityException) {
-            Log.d(TAG, "Lost location permission.$unlikely");
+        } catch (SecurityException e) {
+            if (isDebug) {
+                Log.d(TAG, "Lost location permission.$unlikely");
+            }
+            //App Event Log
+            String className = new Throwable()
+                    .getStackTrace()[0]
+                    .getClassName();
+            String methodName = new Throwable()
+                    .getStackTrace()[0]
+                    .getMethodName();
+            int lineNumber = new Throwable()
+                    .getStackTrace()[0]
+                    .getLineNumber();
+            String title = e.getLocalizedMessage();
+            String data = e.getMessage();
+            try {
+                data = e.getMessage() + " # " + e.getCause().getMessage() + " # " +
+                        e.getStackTrace().toString();
+            } catch (Exception er) {
+                er.printStackTrace();
+            }
+            addAppEventLog(LogType.EXCEPTION, LogTag.LOCATION_FETCH, title, data,
+                    className, methodName, lineNumber);
         }
     }
 
@@ -233,6 +312,27 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
             mqData.put("LocationValue", sb.toString());
         } catch (JSONException e) {
             e.printStackTrace();
+
+            //App Event Log
+            String className = new Throwable()
+                    .getStackTrace()[0]
+                    .getClassName();
+            String methodName = new Throwable()
+                    .getStackTrace()[0]
+                    .getMethodName();
+            int lineNumber = new Throwable()
+                    .getStackTrace()[0]
+                    .getLineNumber();
+            String title = e.getLocalizedMessage();
+            String data = e.getMessage();
+            try {
+                data = e.getMessage() + " # " + e.getCause().getMessage() + " # " +
+                        e.getStackTrace().toString();
+            } catch (Exception er) {
+                er.printStackTrace();
+            }
+            addAppEventLog(LogType.EXCEPTION, LogTag.LOCATION_FETCH, title, data,
+                    className, methodName, lineNumber);
         }
         String appState = getAppStateValue(this);
 
@@ -249,13 +349,33 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
             } else {
                 String locUpdateTopicOnline = getLocUpdateTopicOnline(this);
                 if (locUpdateTopicOnline.isEmpty()) {
-                    locUpdateTopicOnline =ENV_PREFIX + "/drivers_curr_loc/" + getDriverId(this) +"/newlocQoS";
+                    locUpdateTopicOnline = ENV_PREFIX + "/drivers_curr_loc/" + getDriverId(this) + "/newlocQoS";
                 }
                 publishMessage(ENV_PREFIX + "/" + locUpdateTopicOnline, locUpdatePayload);
 
             }
         } catch (Exception e) {
             e.printStackTrace();
+            //App Event Log
+            String className = new Throwable()
+                    .getStackTrace()[0]
+                    .getClassName();
+            String methodName = new Throwable()
+                    .getStackTrace()[0]
+                    .getMethodName();
+            int lineNumber = new Throwable()
+                    .getStackTrace()[0]
+                    .getLineNumber();
+            String title = e.getLocalizedMessage();
+            String data = e.getMessage();
+            try {
+                data = e.getMessage() + " # " + e.getCause().getMessage() + " # " +
+                        e.getStackTrace().toString();
+            } catch (Exception er) {
+                er.printStackTrace();
+            }
+            addAppEventLog(LogType.DEBUG, LogTag.LOCATION_FETCH, title, data,
+                    className, methodName, lineNumber);
         }
         if (methodChannel != null) {
             try {
@@ -270,13 +390,34 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
                         String latLngStr = getLatLngList(this);
                         if (!latLngStr.isEmpty()) {
 //                            latLngList = Arrays.asList(objectMapper.readValue(latLngStr, LatLng[].class));
-                            latLngList = objectMapper.readValue(latLngStr, new TypeReference<List<LatLng>>(){});
-                        }else{
+                            latLngList = objectMapper.readValue(latLngStr, new TypeReference<List<LatLng>>() {
+                            });
+                        } else {
                             latLngList = new ArrayList<>();
                         }
                     } catch (Exception e) {
                         latLngList = new ArrayList<>();
                         e.printStackTrace();
+                        //App Event Log
+                        String className = new Throwable()
+                                .getStackTrace()[0]
+                                .getClassName();
+                        String methodName = new Throwable()
+                                .getStackTrace()[0]
+                                .getMethodName();
+                        int lineNumber = new Throwable()
+                                .getStackTrace()[0]
+                                .getLineNumber();
+                        String title = e.getLocalizedMessage();
+                        String data = e.getMessage();
+                        try {
+                            data = e.getMessage() + " # " + e.getCause().getMessage() + " # " +
+                                    e.getStackTrace().toString();
+                        } catch (Exception er) {
+                            er.printStackTrace();
+                        }
+                        addAppEventLog(LogType.EXCEPTION, LogTag.LOCATION_FETCH, title, data,
+                                className, methodName, lineNumber);
                     }
                     try {
                         latLngList.add(newLatLng);
@@ -286,6 +427,26 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
                         latLngStrUpdated = new String(data);
                     } catch (Exception e) {
                         e.printStackTrace();
+                        //App Event Log
+                        String className = new Throwable()
+                                .getStackTrace()[0]
+                                .getClassName();
+                        String methodName = new Throwable()
+                                .getStackTrace()[0]
+                                .getMethodName();
+                        int lineNumber = new Throwable()
+                                .getStackTrace()[0]
+                                .getLineNumber();
+                        String title = e.getLocalizedMessage();
+                        String data = e.getMessage();
+                        try {
+                            data = e.getMessage() + " # " + e.getCause().getMessage() + " # " +
+                                    e.getStackTrace().toString();
+                        } catch (Exception er) {
+                            er.printStackTrace();
+                        }
+                        addAppEventLog(LogType.EXCEPTION, LogTag.LOCATION_FETCH, title, data,
+                                className, methodName, lineNumber);
                     }
                 }
 //                else {
@@ -298,12 +459,52 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
                 try {
                     mqData.put("RideLatLngList", latLngStrUpdated);
                     setLatLngList(this, latLngStrUpdated);
-                }catch (Exception e){
+                } catch (Exception e) {
                     e.printStackTrace();
+                    //App Event Log
+                    String className = new Throwable()
+                            .getStackTrace()[0]
+                            .getClassName();
+                    String methodName = new Throwable()
+                            .getStackTrace()[0]
+                            .getMethodName();
+                    int lineNumber = new Throwable()
+                            .getStackTrace()[0]
+                            .getLineNumber();
+                    String title = e.getLocalizedMessage();
+                    String data = e.getMessage();
+                    try {
+                        data = e.getMessage() + " # " + e.getCause().getMessage() + " # " +
+                                e.getStackTrace().toString();
+                    } catch (Exception er) {
+                        er.printStackTrace();
+                    }
+                    addAppEventLog(LogType.EXCEPTION, LogTag.LOCATION_FETCH, title, data,
+                            className, methodName, lineNumber);
                 }
                 localBroadcastManager(mqData, ">>>BGS onNewLocation", "Send new location to flutter");
             } catch (Exception e) {
                 e.printStackTrace();
+                //App Event Log
+                String className = new Throwable()
+                        .getStackTrace()[0]
+                        .getClassName();
+                String methodName = new Throwable()
+                        .getStackTrace()[0]
+                        .getMethodName();
+                int lineNumber = new Throwable()
+                        .getStackTrace()[0]
+                        .getLineNumber();
+                String title = e.getLocalizedMessage();
+                String data = e.getMessage();
+                try {
+                    data = e.getMessage() + " # " + e.getCause().getMessage() + " # " +
+                            e.getStackTrace().toString();
+                } catch (Exception er) {
+                    er.printStackTrace();
+                }
+                addAppEventLog(LogType.EXCEPTION, LogTag.LOCATION_FETCH, title, data,
+                        className, methodName, lineNumber);
             }
         }
         try {
@@ -311,44 +512,295 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
             String token = getApiTokenValue(this);
             if (token != null && token.length() > 10) {
                 ApiEndpoints apiEndpoints = RetrofitClientInstance.getRetrofitInstance(token).create(ApiEndpoints.class);
-                Call<DriverLocation> call = apiEndpoints.updateDriverLocation(
-                        new DriverLocation(),
-                        location.getLatitude(),
-                        location.getLongitude(),
-                        getDriverId(this));
+                if(apiEndpoints != null){
+                    Call<DriverLocation> call = apiEndpoints.updateDriverLocation(
+                            new DriverLocation(),
+                            location.getLatitude(),
+                            location.getLongitude(),
+                            getDriverId(this));
 
-                call.enqueue(new Callback<DriverLocation>() {
-                    @Override
-                    public void onResponse(Call<DriverLocation> call, Response<DriverLocation> response) {
-                        Log.d(">>> ApiCall-Success >", response.toString());
-                    }
+                    call.enqueue(new Callback<DriverLocation>() {
+                        @Override
+                        public void onResponse(Call<DriverLocation> call, Response<DriverLocation> response) {
+                            if (isDebug)
+                                Log.d(">>> ApiCall-Success >", response.toString());
+                        }
 
-                    @Override
-                    public void onFailure(Call<DriverLocation> call, Throwable t) {
-                        Log.d(">>> ApiCall-Failed > ", t.getMessage());
-                    }
-                });
+                        @Override
+                        public void onFailure(Call<DriverLocation> call, Throwable t) {
+                            if (isDebug) {
+                                Log.d(">>> ApiCall-Failed > ", t.getMessage());
+                            }
+
+                            //App Event Log
+                            String className = new Throwable()
+                                    .getStackTrace()[0]
+                                    .getClassName();
+                            String methodName = new Throwable()
+                                    .getStackTrace()[0]
+                                    .getMethodName();
+                            int lineNumber = new Throwable()
+                                    .getStackTrace()[0]
+                                    .getLineNumber();
+                            String title = t.getLocalizedMessage();
+                            String data = t.getMessage();
+                            try {
+                                data = t.getMessage() + " # " + t.getCause().getMessage() + " # " + t.getStackTrace().toString();
+                            } catch (Exception e) {
+                                e.printStackTrace();
+                            }
+                            addAppEventLog(LogType.ERROR, LogTag.REST_API_CALL, title, data,
+                                    className, methodName, lineNumber);
+                        }
+                    });
+                }
             }
         } catch (Exception e) {
             e.printStackTrace();
+            //App Event Log
+            String className = new Throwable()
+                    .getStackTrace()[0]
+                    .getClassName();
+            String methodName = new Throwable()
+                    .getStackTrace()[0]
+                    .getMethodName();
+            int lineNumber = new Throwable()
+                    .getStackTrace()[0]
+                    .getLineNumber();
+            String title = e.getLocalizedMessage();
+            String data = e.getMessage();
+            try {
+                data = e.getMessage() + " # " + e.getCause().getMessage() + " # " +
+                        e.getStackTrace().toString();
+            } catch (Exception er) {
+                er.printStackTrace();
+            }
+            addAppEventLog(LogType.EXCEPTION, LogTag.LOCATION_FETCH, title, data,
+                    className, methodName, lineNumber);
+        }
+    }
+
+    void updateDriverMQStatus() {
+        try {
+            /*Create handle for the RetrofitInstance interface*/
+            String token = getApiTokenValue(this);
+//            if (token != null && token.length() > 10) {
+                ApiEndpoints apiEndpoints = RetrofitClientInstance.getRetrofitInstance(token).create(ApiEndpoints.class);
+                if(apiEndpoints != null){
+                    Call<DriverLocation> call = apiEndpoints.updateDriverMqStatus(
+                            new DriverLocation(),
+                            isMqAlive ? 1 : 0,
+                            getDriverId(this));
+                    call.enqueue(new Callback<DriverLocation>() {
+                        @Override
+                        public void onResponse(Call<DriverLocation> call, Response<DriverLocation> response) {
+                            if (isDebug)
+                                Log.d(">>> ApiCall-Success >", response.toString());
+                        }
+
+                        @Override
+                        public void onFailure(Call<DriverLocation> call, Throwable t) {
+                            if (isDebug) {
+                                Log.d(">>> ApiCall-Failed > ", t.getMessage());
+                            }
+
+                            //App Event Log
+                            String className = new Throwable()
+                                    .getStackTrace()[0]
+                                    .getClassName();
+                            String methodName = new Throwable()
+                                    .getStackTrace()[0]
+                                    .getMethodName();
+                            int lineNumber = new Throwable()
+                                    .getStackTrace()[0]
+                                    .getLineNumber();
+                            String title = t.getLocalizedMessage() + " --- "
+                                    + (isMqAlive ? LogTag.MQ_CONNECTED.toString() : LogTag.MQ_DISCONNECTED.toString());
+                            String data = t.getMessage();
+                            try {
+                                data = t.getMessage() + " # " + t.getCause().getMessage() + " # " + t.getStackTrace().toString();
+                            } catch (Exception e) {
+                                e.printStackTrace();
+                            }
+                            addAppEventLog(LogType.ERROR, LogTag.REST_API_CALL, title, data,
+                                    className, methodName, lineNumber);
+                        }
+                    });
+                }
+//            }
+        } catch (Exception e) {
+            e.printStackTrace();
+            //App Event Log
+            String className = new Throwable()
+                    .getStackTrace()[0]
+                    .getClassName();
+            String methodName = new Throwable()
+                    .getStackTrace()[0]
+                    .getMethodName();
+            int lineNumber = new Throwable()
+                    .getStackTrace()[0]
+                    .getLineNumber();
+            String title = e.getLocalizedMessage();
+            String data = e.getMessage();
+            try {
+                data = e.getMessage() + " # " + e.getCause().getMessage() + " # " +
+                        e.getStackTrace().toString();
+            } catch (Exception er) {
+                er.printStackTrace();
+            }
+            addAppEventLog(LogType.EXCEPTION, isMqAlive ? LogTag.MQ_CONNECTED : LogTag.MQ_DISCONNECTED, title, data,
+                    className, methodName, lineNumber);
+        }
+    }
+
+    public void stopBackgroundService() {
+        if(infiniteTimer!=null){
+            infiniteTimer.cancel();
+            infiniteTimer = null;
+        }
+        try {
+            Intent intent = new Intent(this, WatchdogReceiver.class);
+            PendingIntent pi;
+            if (SDK_INT >= Build.VERSION_CODES.S) {
+                pi = PendingIntent.getBroadcast(getApplicationContext(), 111, intent, PendingIntent.FLAG_CANCEL_CURRENT | PendingIntent.FLAG_MUTABLE);
+            } else {
+                pi = PendingIntent.getBroadcast(getApplicationContext(), 111, intent, PendingIntent.FLAG_CANCEL_CURRENT);
+            }
+            AlarmManager alarmManager = (AlarmManager) getSystemService(ALARM_SERVICE);
+            alarmManager.cancel(pi);
+            stopTracking();
+            stopSelf();
+
+        }catch (Exception e){
+            e.printStackTrace();
+        }
+    }
+
+    void updateBgServiceStatus(boolean isBgServiceAlive, boolean isManualStop) {
+        try {
+            /*Create handle for the RetrofitInstance interface*/
+            String token = getApiTokenValue(this);
+            if (token != null && token.length() > 10) {
+                ApiEndpoints apiEndpoints = RetrofitClientInstance.getRetrofitInstance(token).create(ApiEndpoints.class);
+                if(apiEndpoints != null){
+                    Call<DriverLocation> call = apiEndpoints.updateBgServiceStatus(
+                            new DriverLocation(),
+                            isBgServiceAlive ? 1 : 0,
+                            isManualStop ? 1 : 0,
+                            getDriverId(this));
+
+                    call.enqueue(new Callback<DriverLocation>() {
+                        @Override
+                        public void onResponse(Call<DriverLocation> call, Response<DriverLocation> response) {
+                            if (isDebug)
+                                Log.d(">>> ApiCall-Success >", response.toString());
+                            if (isManualStop) {
+                                stopBackgroundService();
+                            }
+                        }
+
+                        @Override
+                        public void onFailure(Call<DriverLocation> call, Throwable t) {
+                            if (isDebug) {
+                                Log.d(">>> ApiCall-Failed > ", t.getMessage());
+                            }
+                            try {
+                                //App Event Log
+                                String className = new Throwable()
+                                        .getStackTrace()[0]
+                                        .getClassName();
+                                String methodName = new Throwable()
+                                        .getStackTrace()[0]
+                                        .getMethodName();
+                                int lineNumber = new Throwable()
+                                        .getStackTrace()[0]
+                                        .getLineNumber();
+                                String title = t.getLocalizedMessage() + " --- "
+                                        + (isMqAlive ? LogTag.MQ_CONNECTED.toString() : LogTag.MQ_DISCONNECTED.toString());
+                                String data = t.getMessage();
+                                try {
+                                    data = t.getMessage() + " # " + t.getCause().getMessage() + " # " + t.getStackTrace().toString();
+                                } catch (Exception e) {
+                                    e.printStackTrace();
+                                }
+                                addAppEventLog(LogType.ERROR, LogTag.REST_API_CALL, title, data,
+                                        className, methodName, lineNumber);
+                            } catch (Exception e) {
+                                e.printStackTrace();
+                            }
+                            if (isManualStop) {
+                                stopBackgroundService();
+                            }
+                        }
+                    });
+                }
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+            //App Event Log
+            String className = new Throwable()
+                    .getStackTrace()[0]
+                    .getClassName();
+            String methodName = new Throwable()
+                    .getStackTrace()[0]
+                    .getMethodName();
+            int lineNumber = new Throwable()
+                    .getStackTrace()[0]
+                    .getLineNumber();
+            String title = e.getLocalizedMessage();
+            String data = e.getMessage();
+            try {
+                data = e.getMessage() + " # " + e.getCause().getMessage() + " # " +
+                        e.getStackTrace().toString();
+            } catch (Exception er) {
+                er.printStackTrace();
+            }
+            addAppEventLog(LogType.EXCEPTION, isMqAlive ? LogTag.MQ_CONNECTED : LogTag.MQ_DISCONNECTED, title, data,
+                    className, methodName, lineNumber);
         }
     }
 
     private void startTracking() {
 //        lockStatic.acquire(24 * 60 * 60 * 1000L /*24 hours max */);
-        Log.d(TAG, "Requesting location updates");
+        if (isDebug) {
+            Log.d(TAG, "Requesting location updates");
+        }
         try {
             fusedLocationProviderClient.requestLocationUpdates(locationRequest, locationCallback, Looper.myLooper());
-        } catch (SecurityException securityException) {
+        } catch (SecurityException e) {
 //            if (lockStatic.isHeld() == true) {
 //                lockStatic.release();
 //            }
-            Log.d(TAG, "Lost location permission. Could not request updates");
+            if (isDebug) {
+                Log.d(TAG, "Lost location permission. Could not request updates");
+            }
+            //App Event Log
+            String className = new Throwable()
+                    .getStackTrace()[0]
+                    .getClassName();
+            String methodName = new Throwable()
+                    .getStackTrace()[0]
+                    .getMethodName();
+            int lineNumber = new Throwable()
+                    .getStackTrace()[0]
+                    .getLineNumber();
+            String title = e.getLocalizedMessage();
+            String data = e.getMessage();
+            try {
+                data = e.getMessage() + " # " + e.getCause().getMessage() + " # " +
+                        e.getStackTrace().toString();
+            } catch (Exception er) {
+                er.printStackTrace();
+            }
+            addAppEventLog(LogType.EXCEPTION, LogTag.LOCATION_FETCH, title, data,
+                    className, methodName, lineNumber);
         }
     }
 
     private void getCurrentLocation() {
-        Log.d(TAG, ">>> Requesting current location");
+        if (isDebug) {
+            Log.d(TAG, ">>> Requesting current location");
+        }
         try {
             fusedLocationProviderClient.getCurrentLocation(100, new CancellationToken() {
                 @NonNull
@@ -372,22 +824,90 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
                         localBroadcastManager(currentLocation, ">>> BGS CurrentLoc ", "broadcast getCurrentLocation");
                     } catch (JSONException e) {
                         e.printStackTrace();
+
+                        //App Event Log
+                        String className = new Throwable()
+                                .getStackTrace()[0]
+                                .getClassName();
+                        String methodName = new Throwable()
+                                .getStackTrace()[0]
+                                .getMethodName();
+                        int lineNumber = new Throwable()
+                                .getStackTrace()[0]
+                                .getLineNumber();
+                        String title = e.getLocalizedMessage();
+                        String data = e.getMessage();
+                        try {
+                            data = e.getMessage() + " # " + e.getCause().getMessage() + " # " +
+                                    e.getStackTrace().toString();
+                        } catch (Exception er) {
+                            er.printStackTrace();
+                        }
+                        addAppEventLog(LogType.EXCEPTION, LogTag.LOCATION_FETCH, title, data,
+                                className, methodName, lineNumber);
                     }
                 }
             });
 
-        } catch (SecurityException securityException) {
-            Log.d(TAG, "Lost location permission. Could not request updates");
+        } catch (SecurityException e) {
+            if (isDebug) {
+                Log.d(TAG, "Lost location permission. Could not request updates");
+            }
+            //App Event Log
+            String className = new Throwable()
+                    .getStackTrace()[0]
+                    .getClassName();
+            String methodName = new Throwable()
+                    .getStackTrace()[0]
+                    .getMethodName();
+            int lineNumber = new Throwable()
+                    .getStackTrace()[0]
+                    .getLineNumber();
+            String title = e.getLocalizedMessage();
+            String data = e.getMessage();
+            try {
+                data = e.getMessage() + " # " + e.getCause().getMessage() + " # " +
+                        e.getStackTrace().toString();
+            } catch (Exception er) {
+                er.printStackTrace();
+            }
+            addAppEventLog(LogType.EXCEPTION, LogTag.LOCATION_FETCH, title, data,
+                    className, methodName, lineNumber);
         }
 
     }
 
     private void stopTracking() {
-        Log.d(TAG, "Removing location updates");
+        if (isDebug) {
+            Log.d(TAG, "Removing location updates");
+        }
         try {
             fusedLocationProviderClient.removeLocationUpdates(locationCallback);
-        } catch (SecurityException unlikely) {
-            Log.d(TAG, "Lost location permission. Could not remove updates. $unlikely");
+        } catch (SecurityException e) {
+            if (isDebug) {
+                Log.d(TAG, "Lost location permission. Could not remove updates. $unlikely");
+            }
+            //App Event Log
+            String className = new Throwable()
+                    .getStackTrace()[0]
+                    .getClassName();
+            String methodName = new Throwable()
+                    .getStackTrace()[0]
+                    .getMethodName();
+            int lineNumber = new Throwable()
+                    .getStackTrace()[0]
+                    .getLineNumber();
+            String title = e.getLocalizedMessage();
+            String data = e.getMessage();
+            try {
+                data = e.getMessage() + " # " + e.getCause().getMessage() + " # " +
+                        e.getStackTrace().toString();
+            } catch (Exception er) {
+                er.printStackTrace();
+            }
+            addAppEventLog(LogType.EXCEPTION, LogTag.LOCATION_FETCH, title, data,
+                    className, methodName, lineNumber);
+
         }
     }
 
@@ -398,42 +918,85 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
         Intent intent = new Intent("id.flutter/background_service");
         intent.putExtra("data", broadcastData.toString());
         manager.sendBroadcast(intent);
-        Log.d(tag, logString);
+        if (isDebug) {
+            Log.d(tag, logString);
+        }
     }
 
     @Override
     public void onDestroy() {
-        Log.d(">>> BGS onDestroy()", "onDestroy() is called || isManuallyStopped value =" + isManuallyStopped);
+        try {
+            if (isDebug) {
+                Log.d(">>> BGS onDestroy()", "onDestroy() is called || isManuallyStopped value =" + isManuallyStopped);
+            }
 
-        if (!isManuallyStopped) {
-            enqueue(this);
-        } else {
-            setManuallyStopped(true);
-            Log.d(">>> BGS onDestroy()", "onDestroy() is called || setManuallyStopped = true");
+            if (!isManuallyStopped) {
+                enqueue(this);
 
+                //App Event Log
+                String className = new Throwable()
+                        .getStackTrace()[0]
+                        .getClassName();
+                String methodName = new Throwable()
+                        .getStackTrace()[0]
+                        .getMethodName();
+                int lineNumber = new Throwable()
+                        .getStackTrace()[0]
+                        .getLineNumber();
+                String title = "Bg Service Stopped";
+                String data = "Service Stopped";
+                addAppEventLog(LogType.DEBUG, LogTag.SERVICE_ENDED, title, data,
+                        className, methodName, lineNumber);
+            } else {
+                setManuallyStopped(true);
+                if (isDebug) {
+                    Log.d(">>> BGS onDestroy()", "onDestroy() is called || setManuallyStopped = true");
+                }
+
+                //App Event Log
+                String className = new Throwable()
+                        .getStackTrace()[0]
+                        .getClassName();
+                String methodName = new Throwable()
+                        .getStackTrace()[0]
+                        .getMethodName();
+                int lineNumber = new Throwable()
+                        .getStackTrace()[0]
+                        .getLineNumber();
+                String title = "Bg Service Stopped Manually";
+                String data = "On Destroy Manually stopped";
+                addAppEventLog(LogType.DEBUG, LogTag.SERVICE_ENDED, title, data,
+                        className, methodName, lineNumber);
+            }
+            stopForeground(true);
+            isRunning.set(false);
+
+            hive_client.disconnect();
+
+            if (backgroundEngine != null) {
+                backgroundEngine.getServiceControlSurface().detachFromService();
+                backgroundEngine.destroy();
+                backgroundEngine = null;
+            }
+
+            methodChannel = null;
+            dartCallback = null;
+            super.onDestroy();
+
+            if (isDebug) {
+                Log.d(">>> BGS onDestroy()", "onDestroy() is called");
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
         }
-        stopForeground(true);
-        isRunning.set(false);
-
-        hive_client.disconnect();
-
-        if (backgroundEngine != null) {
-            backgroundEngine.getServiceControlSurface().detachFromService();
-            backgroundEngine.destroy();
-            backgroundEngine = null;
+        try {
+            updateBgServiceStatus(false, isManuallyStopped);
+        } catch (Exception e) {
+            e.printStackTrace();
         }
-
-        methodChannel = null;
-        dartCallback = null;
-        super.onDestroy();
-
-        Log.d(">>> BGS onDestroy()", "onDestroy() is called");
     }
 
     private void createNotificationChannel() {
-
-
-
         if (SDK_INT >= Build.VERSION_CODES.O) {
             CharSequence name = "Background Service";
             String description = "Executing process in background";
@@ -451,7 +1014,6 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
         String packageName = getApplicationContext().getPackageName();
         Intent i = getPackageManager().getLaunchIntentForPackage(packageName);
         i.setFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP);
-
 
         PendingIntent pi;
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
@@ -493,14 +1055,14 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
                 .setContentIntent(pi);
 
         startForeground(99778, mBuilder.build());
-
     }
-
 
     @RequiresApi(api = Build.VERSION_CODES.LOLLIPOP)
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
-        Log.d(">>> BGS onStartCommand", "onStartCommand() is called");
+        if (isDebug) {
+            Log.d(">>> BGS onStartCommand", "onStartCommand() is called");
+        }
 
         setManuallyStopped(false);
 
@@ -513,6 +1075,28 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
         getLock(getApplicationContext()).acquire();
 
 //      monitorNetwork();
+
+        try {
+            updateBgServiceStatus(true, false);
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+
+        //App Event Log
+        String className = new Throwable()
+                .getStackTrace()[0]
+                .getClassName();
+        String methodName = new Throwable()
+                .getStackTrace()[0]
+                .getMethodName();
+        int lineNumber = new Throwable()
+                .getStackTrace()[0]
+                .getLineNumber();
+        String title = "On Start Command";
+        String data = "On Start Command";
+        addAppEventLog(LogType.DEBUG, LogTag.SERVICE_STARTED, title, data,
+                className, methodName, lineNumber);
+
         return START_STICKY;
     }
 
@@ -528,6 +1112,26 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
             connectivityManager.requestNetwork(networkRequest, networkCallback);
         } catch (Exception e) {
             e.printStackTrace();
+            //App Event Log
+            String className = new Throwable()
+                    .getStackTrace()[0]
+                    .getClassName();
+            String methodName = new Throwable()
+                    .getStackTrace()[0]
+                    .getMethodName();
+            int lineNumber = new Throwable()
+                    .getStackTrace()[0]
+                    .getLineNumber();
+            String title = e.getLocalizedMessage();
+            String data = e.getMessage();
+            try {
+                data = e.getMessage() + " # " + e.getCause().getMessage() + " # " +
+                        e.getStackTrace().toString();
+            } catch (Exception er) {
+                er.printStackTrace();
+            }
+            addAppEventLog(LogType.DEBUG, LogTag.LOCATION_FETCH, title, data,
+                    className, methodName, lineNumber);
         }
     }
 
@@ -536,9 +1140,26 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
     private void runService() {
         try {
 
-            Log.d(">>> BGS runService ", "runService is called");
-            if (isRunning.get() || (backgroundEngine != null && !backgroundEngine.getDartExecutor().isExecutingDart()))
+            if (isDebug) {
+                Log.d(">>> BGS runService ", "runService is called");
+            }
+            if (isRunning.get() || (backgroundEngine != null && !backgroundEngine.getDartExecutor().isExecutingDart())) {
+                //App Event Log
+                String className = new Throwable()
+                        .getStackTrace()[0]
+                        .getClassName();
+                String methodName = new Throwable()
+                        .getStackTrace()[0]
+                        .getMethodName();
+                int lineNumber = new Throwable()
+                        .getStackTrace()[0]
+                        .getLineNumber();
+                String title = "Is Running is True";
+                String data = "Is running is true or backgroundEngin is not null and isExecutingDart is false ";
+                addAppEventLog(LogType.DEBUG, LogTag.SERVICE_RUNNING, title, data,
+                        className, methodName, lineNumber);
                 return;
+            }
 
             SharedPreferences pref = getSharedPreferences("id.flutter.background_service", MODE_PRIVATE);
             long callbackHandle = pref.getLong("callback_handle", 0);
@@ -546,7 +1167,24 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
             FlutterInjector.instance().flutterLoader().ensureInitializationComplete(getApplicationContext(), null);
             FlutterCallbackInformation callback = FlutterCallbackInformation.lookupCallbackInformation(callbackHandle);
             if (callback == null) {
-                Log.e("BGS >>> callback ", "callback handle not found");
+                if (isDebug) {
+                    Log.e("BGS >>> callback ", "callback handle not found");
+                }
+
+                //App Event Log
+                String className = new Throwable()
+                        .getStackTrace()[0]
+                        .getClassName();
+                String methodName = new Throwable()
+                        .getStackTrace()[0]
+                        .getMethodName();
+                int lineNumber = new Throwable()
+                        .getStackTrace()[0]
+                        .getLineNumber();
+                String title = "Callback is null";
+                String data = "Callback handle not found";
+                addAppEventLog(LogType.DEBUG, LogTag.SERVICE_RUNNING, title, data,
+                        className, methodName, lineNumber);
                 return;
             }
 
@@ -563,11 +1201,48 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
 
             updateNotificationInfo();
 
+            //App Event Log
+            String className = new Throwable()
+                    .getStackTrace()[0]
+                    .getClassName();
+            String methodName = new Throwable()
+                    .getStackTrace()[0]
+                    .getMethodName();
+            int lineNumber = new Throwable()
+                    .getStackTrace()[0]
+                    .getLineNumber();
+            String title = "Bg Service runing";
+            String data = "Update Notification info called";
+            addAppEventLog(LogType.DEBUG, LogTag.SERVICE_RUNNING, title, data,
+                    className, methodName, lineNumber);
+
         } catch (UnsatisfiedLinkError e) {
             notificationContent = "Error " + e.getMessage();
             updateNotificationInfo();
 
-            Log.w("BGS >>> ERROR", "UnsatisfiedLinkError: After a reboot this may happen for a short period and it is ok to ignore then!" + e.getMessage());
+            if (isDebug) {
+                Log.w("BGS >>> ERROR", "UnsatisfiedLinkError: After a reboot this may happen for a short period and it is ok to ignore then!" + e.getMessage());
+            }
+            //App Event Log
+            String className = new Throwable()
+                    .getStackTrace()[0]
+                    .getClassName();
+            String methodName = new Throwable()
+                    .getStackTrace()[0]
+                    .getMethodName();
+            int lineNumber = new Throwable()
+                    .getStackTrace()[0]
+                    .getLineNumber();
+            String title = e.getLocalizedMessage();
+            String data = e.getMessage();
+            try {
+                data = e.getMessage() + " # " + e.getCause().getMessage() + " # " +
+                        e.getStackTrace().toString();
+            } catch (Exception er) {
+                er.printStackTrace();
+            }
+            addAppEventLog(LogType.ERROR, LogTag.SERVICE_RUNNING, title, data,
+                    className, methodName, lineNumber);
         }
     }
 
@@ -575,6 +1250,7 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
 
     private void initializeConnection() {
         if (hive_client == null) {
+            isMqAlive = false;
             String serverHost = BackgroundService.getMqServerHost(this);
             int serverPort = BackgroundService.getMqPort(this);
             String clientId = BackgroundService.getMqClientId(this);
@@ -583,26 +1259,74 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
                     .serverHost(serverHost)
                     .serverPort(serverPort)
                     .addConnectedListener(context -> {
-                        Log.d(">>> BGS Connected ", context.toString());
-                        if (connectTimer != null) {
-                            connectTimer.cancel();
-                            connectTimer = null;
+                        if (isDebug) {
+                            Log.d(">>> BGS Connected ", context.toString());
                         }
+                        try {
+                            isMqAlive = true;
+                            onMqttConnected();
+                            handleSubscriptionResponse();
 
-                        onMqttConnected();
-                        handleSubscriptionResponse();
+                            //App Event Log
+                            String className = new Throwable()
+                                    .getStackTrace()[0]
+                                    .getClassName();
+                            String methodName = new Throwable()
+                                    .getStackTrace()[0]
+                                    .getMethodName();
+                            int lineNumber = new Throwable()
+                                    .getStackTrace()[0]
+                                    .getLineNumber();
+                            String title = "In Mq connected";
+                            String data = "mq is connected";
+                            addAppEventLog(LogType.DEBUG, LogTag.MQ_CONNECTED, title, data,
+                                    className, methodName, lineNumber);
 
-                    }).addDisconnectedListener(context -> {
-                        Log.d(">>> BGS Disconnected ", context.toString());
-                        int PERIOD = 10;
-                        if (connectTimer == null) {
-                            connectTimer = new Timer();
-                            connectTimer.schedule(new TimerTask() {
-                                @Override
-                                public void run() {
-                                    connectMqtt();
-                                }
-                            }, PERIOD * 1000, PERIOD * 1000);
+                            if (connectTimer != null) {
+                                connectTimer.cancel();
+                                connectTimer = null;
+                            }
+                        } catch (Exception exception) {
+                            exception.printStackTrace();
+                        }
+                    })
+                    .addDisconnectedListener(context -> {
+                        try {
+                            if (isDebug) {
+                                Log.d(">>> BGS Disconnected ", context.toString());
+                            }
+                            int PERIOD = 10;
+                            isMqAlive = false;
+                            if (connectTimer == null) {
+                                connectTimer = new Timer();
+                                connectTimer.schedule(new TimerTask() {
+                                    @Override
+                                    public void run() {
+                                        connectMqtt();
+                                    }
+                                }, PERIOD * 1000, PERIOD * 1000);
+                            }
+                            //App Event Log
+                            String className = new Throwable()
+                                    .getStackTrace()[0]
+                                    .getClassName();
+                            String methodName = new Throwable()
+                                    .getStackTrace()[0]
+                                    .getMethodName();
+                            int lineNumber = new Throwable()
+                                    .getStackTrace()[0]
+                                    .getLineNumber();
+                            String title = "MQ disconnected";
+                            String data = "mq disconnected";
+                            addAppEventLog(LogType.DEBUG, LogTag.MQ_DISCONNECTED, title, data,
+                                    className, methodName, lineNumber);
+                        } catch (Exception exception) {
+                            exception.printStackTrace();
+                        }
+                        try {
+                            updateDriverMQStatus();
+                        } catch (Exception exception) {
+                            exception.printStackTrace();
                         }
                     })
                     .buildAsync();
@@ -612,19 +1336,73 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
 
     private void onMqttConnected() {
         try {
+            updateDriverMQStatus();
+        } catch (Exception exception) {
+            exception.printStackTrace();
+        }
+        try {
             JSONObject mqData = new JSONObject();
             mqData.put("responseData", "connected");
             if (methodChannel != null) {
                 try {
                     localBroadcastManager(mqData, ">>> BGS onMqttConnected", "sent onMqttConnected is connected");
+                    String driverId = getDriverId(this);
+                    if(driverId != null && driverId.length() > 0){
+                        subscribeTopic(ENV_PREFIX + "/rd/handshake/" + driverId);
+                    }
                 } catch (Exception e) {
                     e.printStackTrace();
+                    //App Event Log
+                    String className = new Throwable()
+                            .getStackTrace()[0]
+                            .getClassName();
+                    String methodName = new Throwable()
+                            .getStackTrace()[0]
+                            .getMethodName();
+                    int lineNumber = new Throwable()
+                            .getStackTrace()[0]
+                            .getLineNumber();
+                    String title = e.getLocalizedMessage();
+                    String data = e.getMessage();
+                    try {
+                        data = e.getMessage() + " # " + e.getCause().getMessage() + " # " +
+                                e.getStackTrace().toString();
+                    } catch (Exception er) {
+                        er.printStackTrace();
+                    }
+                    try {
+                        addAppEventLog(LogType.DEBUG, LogTag.LOCATION_FETCH, title, data,
+                                className, methodName, lineNumber);
+                    } catch (Exception exception) {
+                        exception.printStackTrace();
+                    }
                 }
             }
+
             // Subscribe all last subscribed topics
             subscribeTopicsFromLastSession();
         } catch (JSONException e) {
             e.printStackTrace();
+            //App Event Log
+            String className = new Throwable()
+                    .getStackTrace()[0]
+                    .getClassName();
+            String methodName = new Throwable()
+                    .getStackTrace()[0]
+                    .getMethodName();
+            int lineNumber = new Throwable()
+                    .getStackTrace()[0]
+                    .getLineNumber();
+            String title = e.getLocalizedMessage();
+            String data = e.getMessage();
+            try {
+                data = e.getMessage() + " # " + e.getCause().getMessage() + " # " +
+                        e.getStackTrace().toString();
+            } catch (Exception er) {
+                er.printStackTrace();
+            }
+            addAppEventLog(LogType.DEBUG, LogTag.LOCATION_FETCH, title, data,
+                    className, methodName, lineNumber);
         }
     }
 
@@ -639,8 +1417,24 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
                     .applySimpleAuth()
                     .keepAlive(10)
                     .send();
-            Log.d(">>> BGS connectMqtt", "hive_client.toAsync().connectWith()");
+            if (isDebug) {
+                Log.d(">>> BGS connectMqtt", "hive_client.toAsync().connectWith()");
+            }
 
+            //App Event Log
+            String className = new Throwable()
+                    .getStackTrace()[0]
+                    .getClassName();
+            String methodName = new Throwable()
+                    .getStackTrace()[0]
+                    .getMethodName();
+            int lineNumber = new Throwable()
+                    .getStackTrace()[0]
+                    .getLineNumber();
+            String title = "MQ connect trying";
+            String data = "mq connection trying";
+            addAppEventLog(LogType.DEBUG, LogTag.MQ_CONNECT_TRY, title, data,
+                    className, methodName, lineNumber);
         }
     }
 
@@ -662,6 +1456,26 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
             tpType = valuesPart3[1];
         } catch (Exception e) {
             e.printStackTrace();
+            //App Event Log
+            String className = new Throwable()
+                    .getStackTrace()[0]
+                    .getClassName();
+            String methodName = new Throwable()
+                    .getStackTrace()[0]
+                    .getMethodName();
+            int lineNumber = new Throwable()
+                    .getStackTrace()[0]
+                    .getLineNumber();
+            String title = e.getLocalizedMessage();
+            String data = e.getMessage();
+            try {
+                data = e.getMessage() + " # " + e.getCause().getMessage() + " # " +
+                        e.getStackTrace().toString();
+            } catch (Exception er) {
+                er.printStackTrace();
+            }
+            addAppEventLog(LogType.EXCEPTION, LogTag.MQ_MSG_RECEIVED, title, data,
+                    className, methodName, lineNumber);
         }
 
         if (bookingCounterTimer == null) {
@@ -679,6 +1493,26 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
                         localBroadcastManager(mqData, ">>> TickTick > ", " Timer Tick " + timerCurrentTick);
                     } catch (Exception e) {
                         e.printStackTrace();
+                        //App Event Log
+                        String className = new Throwable()
+                                .getStackTrace()[0]
+                                .getClassName();
+                        String methodName = new Throwable()
+                                .getStackTrace()[0]
+                                .getMethodName();
+                        int lineNumber = new Throwable()
+                                .getStackTrace()[0]
+                                .getLineNumber();
+                        String title = e.getLocalizedMessage();
+                        String data = e.getMessage();
+                        try {
+                            data = e.getMessage() + " # " + e.getCause().getMessage() + " # " +
+                                    e.getStackTrace().toString();
+                        } catch (Exception er) {
+                            er.printStackTrace();
+                        }
+                        addAppEventLog(LogType.DEBUG, LogTag.LOCATION_FETCH, title, data,
+                                className, methodName, lineNumber);
                     }
                     if (timerCurrentTick <= 0 && !isBookingTimerCancelled) {
                         bookingCounterTimer.cancel();
@@ -688,6 +1522,10 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
                     }
                 }
             }, 1000, 1000);
+        }
+
+        if (rideReferenceNo.length() > 0) {
+            subscribeTopic(ENV_PREFIX + "/rd/rq/cl/" + rideReferenceNo);
         }
     }
 
@@ -732,14 +1570,16 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
                 rideRequest.driver_id_fk = Integer.parseInt(driverId != "" ? driverId : "0");
                 rideRequest.lat = currentLocation.getLatitude();
                 rideRequest.lng = currentLocation.getLongitude();
-                rideRequest.driver_cancel_reason = "Pass";
+                rideRequest.driver_cancel_reason = "Auto-Pass";
 
                 ApiEndpoints apiEndpoints = RetrofitClientInstance.getRetrofitInstance(token).create(ApiEndpoints.class);
                 Call<DriverLocation> call = apiEndpoints.rejectRideRequest(rideRequest);
                 call.enqueue(new Callback<DriverLocation>() {
                     @Override
                     public void onResponse(Call<DriverLocation> call, Response<DriverLocation> response) {
-                        Log.d(">>> ApiCall-Success >", response.toString());
+                        if (isDebug) {
+                            Log.d(">>> ApiCall-Success >", response.toString());
+                        }
                         // Pass-Cancel Invoice not shown to driver
                         unSubscribeTopic("rd/rq/cl/" + rideReferenceNo);
                         Random rand = new Random();
@@ -747,7 +1587,7 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
                         messageOnNewTrip = messageOnNewTrip.replaceAll("=OTP=", otp);
                         String passpay = getPassBookingPayload(driverId, messageOnNewTrip, otp);
 
-                        if (tpType == "4" || tpType == "5") {
+                        if (tpType.equals("4") || tpType.equals("5")) {
                             // This is for portal
                             publishMessage(ENV_PREFIX + "/" + "rd/rq/ak/ap/" + rideReferenceNo, passpay);
                             publishMessage(ENV_PREFIX + "/" + "rd/rq/ak/" + rideReferenceNo, passpay);
@@ -763,16 +1603,40 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
                                 call2.enqueue(new Callback<DriverLocation>() {
                                     @Override
                                     public void onResponse(Call<DriverLocation> call, Response<DriverLocation> response) {
-                                        Log.d(">>>ApiCall-PassRide>", response.toString());
+                                        if (isDebug) {
+                                            Log.d(">>>ApiCall-PassRide>", response.toString());
+                                        }
                                     }
 
                                     @Override
                                     public void onFailure(Call<DriverLocation> call, Throwable t) {
-                                        Log.d(">>> Error-Pass > ", t.getMessage());
+                                        if (isDebug) {
+                                            Log.d(">>> Error-Pass > ", t.getMessage());
+                                        }
                                     }
                                 });
                             } catch (Exception e) {
                                 e.printStackTrace();
+                                //App Event Log
+                                String className = new Throwable()
+                                        .getStackTrace()[0]
+                                        .getClassName();
+                                String methodName = new Throwable()
+                                        .getStackTrace()[0]
+                                        .getMethodName();
+                                int lineNumber = new Throwable()
+                                        .getStackTrace()[0]
+                                        .getLineNumber();
+                                String title = e.getLocalizedMessage();
+                                String data = e.getMessage();
+                                try {
+                                    data = e.getMessage() + " # " + e.getCause().getMessage() + " # " +
+                                            e.getStackTrace().toString();
+                                } catch (Exception er) {
+                                    er.printStackTrace();
+                                }
+                                addAppEventLog(LogType.DEBUG, LogTag.LOCATION_FETCH, title, data,
+                                        className, methodName, lineNumber);
                             }
                         } else {
                             //sending to customer mobile app
@@ -782,12 +1646,49 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
 
                     @Override
                     public void onFailure(Call<DriverLocation> call, Throwable t) {
-                        Log.d(">>> ApiCall-Failed > ", t.getMessage());
+                        if (isDebug) {
+                            Log.d(">>> ApiCall-Failed > ", t.getMessage());
+                        }
+
+                        //App Event Log
+                        String className = new Throwable()
+                                .getStackTrace()[0]
+                                .getClassName();
+                        String methodName = new Throwable()
+                                .getStackTrace()[0]
+                                .getMethodName();
+                        int lineNumber = new Throwable()
+                                .getStackTrace()[0]
+                                .getLineNumber();
+                        String title = "AUTO PASS api call";
+                        String data = t.getMessage();
+                        addAppEventLog(LogType.ERROR, LogTag.REST_API_CALL, title, data,
+                                className, methodName, lineNumber);
                     }
                 });
             }
         } catch (Exception e) {
             e.printStackTrace();
+            //App Event Log
+            String className = new Throwable()
+                    .getStackTrace()[0]
+                    .getClassName();
+            String methodName = new Throwable()
+                    .getStackTrace()[0]
+                    .getMethodName();
+            int lineNumber = new Throwable()
+                    .getStackTrace()[0]
+                    .getLineNumber();
+            String title = e.getLocalizedMessage();
+            String data = e.getMessage();
+            try {
+                data = e.getMessage() + " # " + e.getCause().getMessage() + " # " +
+                        e.getStackTrace().toString();
+            } catch (Exception er) {
+                er.printStackTrace();
+            }
+            addAppEventLog(LogType.DEBUG, LogTag.LOCATION_FETCH, title, data,
+                    className, methodName, lineNumber);
         }
     }
 
@@ -795,7 +1696,9 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
         hive_client.publishes(MqttGlobalPublishFilter.ALL,
                 mqtt3Publish -> {
                     try {
-                        Log.d(">>> BGS >>> ", mqtt3Publish.toString());
+                        if (isDebug) {
+                            Log.d(">>> BGS >>> ", mqtt3Publish.toString());
+                        }
 
                         String topic = mqtt3Publish.getTopic().toString();
                         String payload = new String(mqtt3Publish.getPayloadAsBytes());
@@ -815,6 +1718,11 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
                         } else if (topic.contains(ENV_PREFIX + "/rd/af/dr/")) {
                             // check in payload its a payment done or not
                             showNotification(NotificationType.PAYMENT_DONE, topic, payload);
+                        } else if (topic.contains(ENV_PREFIX + "/rd/handshake/")) {
+                            // check in payload its a payment done or not
+                            String driverId = getDriverId(this);
+                            String[] vals = payload.split("=");
+                            publishMessage(ENV_PREFIX + "/rd/handshake/ack/" + vals[0], driverId + "|");
                         }
 
                         if (methodChannel != null) {
@@ -822,10 +1730,50 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
                                 localBroadcastManager(mqData, ">>> BGS >>>  ", "handleSubscriptionResponse broadcast");
                             } catch (Exception e) {
                                 e.printStackTrace();
+                                //App Event Log
+                                String className = new Throwable()
+                                        .getStackTrace()[0]
+                                        .getClassName();
+                                String methodName = new Throwable()
+                                        .getStackTrace()[0]
+                                        .getMethodName();
+                                int lineNumber = new Throwable()
+                                        .getStackTrace()[0]
+                                        .getLineNumber();
+                                String title = e.getLocalizedMessage();
+                                String data = e.getMessage();
+                                try {
+                                    data = e.getMessage() + " # " + e.getCause().getMessage() + " # " +
+                                            e.getStackTrace().toString();
+                                } catch (Exception er) {
+                                    er.printStackTrace();
+                                }
+                                addAppEventLog(LogType.DEBUG, LogTag.LOCATION_FETCH, title, data,
+                                        className, methodName, lineNumber);
                             }
                         }
                     } catch (JSONException e) {
                         e.printStackTrace();
+                        //App Event Log
+                        String className = new Throwable()
+                                .getStackTrace()[0]
+                                .getClassName();
+                        String methodName = new Throwable()
+                                .getStackTrace()[0]
+                                .getMethodName();
+                        int lineNumber = new Throwable()
+                                .getStackTrace()[0]
+                                .getLineNumber();
+                        String title = e.getLocalizedMessage();
+                        String data = e.getMessage();
+                        try {
+                            data = e.getMessage() + " # " + e.getCause().getMessage() + " # " +
+                                    e.getStackTrace().toString();
+                        } catch (Exception er) {
+                            er.printStackTrace();
+                        }
+                        addAppEventLog(LogType.DEBUG, LogTag.LOCATION_FETCH, title, data,
+                                className, methodName, lineNumber);
                     }
                 });
     }
@@ -837,9 +1785,13 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
     }
 
     void subscribeTopic(String topicName) {
-        Log.d(">>> BGS Topic Plain", "subscribeTopic >>> ( " + topicName + " ) is called");
+        if (isDebug) {
+            Log.d(">>> BGS Topic Plain", "subscribeTopic >>> ( " + topicName + " ) is called");
+        }
         String top = topicName.replaceAll("=", "/");
-        Log.d(">>> BGS  Topic Replaced", "subscribeTopic >>> ( " + top + " ) is called");
+        if (isDebug) {
+            Log.d(">>> BGS  Topic Replaced", "subscribeTopic >>> ( " + top + " ) is called");
+        }
 
         addTopic(top);
         hive_client.subscribeWith().topicFilter(top).qos(MqttQos.EXACTLY_ONCE).send();
@@ -850,18 +1802,40 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
         try {
             if (top.startsWith(ENV_PREFIX + "/" + "rd/rq/ak/")) {
                 String[] parts = message.split("#");
-                if (parts[0] == "RQAA" || parts[0] == "RQAP") {
+                String cmd = parts[0].toString().toUpperCase();
+                if (cmd.equals("RQAA") || cmd.equals("RQAP")) {
                     resetBookingCounterTimer();
                 }
-            }else if (top.startsWith(ENV_PREFIX + "/" + "rd/cr/")) {
+            } else if (top.startsWith(ENV_PREFIX + "/" + "rd/cr/")) {
                 String[] parts = message.split("#");
-                if (parts[0] == "RDCT") {
+                String cmd = parts[0].toString().toUpperCase();
+                if (cmd.equals("RDCT")) {
                     String emptyListStr = "[]"; // new String(data)
                     setLatLngList(this, emptyListStr);
                 }
             }
         } catch (Exception e) {
             e.printStackTrace();
+            //App Event Log
+            String className = new Throwable()
+                    .getStackTrace()[0]
+                    .getClassName();
+            String methodName = new Throwable()
+                    .getStackTrace()[0]
+                    .getMethodName();
+            int lineNumber = new Throwable()
+                    .getStackTrace()[0]
+                    .getLineNumber();
+            String title = e.getLocalizedMessage();
+            String data = e.getMessage();
+            try {
+                data = e.getMessage() + " # " + e.getCause().getMessage() + " # " +
+                        e.getStackTrace().toString();
+            } catch (Exception er) {
+                er.printStackTrace();
+            }
+            addAppEventLog(LogType.DEBUG, LogTag.LOCATION_FETCH, title, data,
+                    className, methodName, lineNumber);
         }
         hive_client.toAsync().publishWith()
                 .topic(top)
@@ -886,6 +1860,26 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
             }
         } catch (Exception e) {
             e.printStackTrace();
+            //App Event Log
+            String className = new Throwable()
+                    .getStackTrace()[0]
+                    .getClassName();
+            String methodName = new Throwable()
+                    .getStackTrace()[0]
+                    .getMethodName();
+            int lineNumber = new Throwable()
+                    .getStackTrace()[0]
+                    .getLineNumber();
+            String title = e.getLocalizedMessage();
+            String data = e.getMessage();
+            try {
+                data = e.getMessage() + " # " + e.getCause().getMessage() + " # " +
+                        e.getStackTrace().toString();
+            } catch (Exception er) {
+                er.printStackTrace();
+            }
+            addAppEventLog(LogType.DEBUG, LogTag.LOCATION_FETCH, title, data,
+                    className, methodName, lineNumber);
         }
     }
 
@@ -912,6 +1906,11 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
                     String apiToken = data.getString("api_token");
                     setDriverId(driverId);
                     setApiTokenValue(apiToken);
+                    if(driverId != null && driverId.length() > 0){
+                        subscribeTopic(ENV_PREFIX + "/rd/handshake/" + driverId);
+                    }
+                    ApiEndpoints apiEndpoints = RetrofitClientInstance.getRetrofitInstance(apiToken).create(ApiEndpoints.class);
+                    updateDriverMQStatus();
                 } else if (action.equals("setAppStateValue")) {
                     String appStateValue = data.getString("app_state_value");
                     String locUpdateTopicOnline = data.getString("loc_update_topic_online");
@@ -922,31 +1921,64 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
                     getCurrentLocation();
                 } else if (action.equals("getRideLatLngListValue")) {
                     //TODO
-                }else if (action.equals("stopService")) {
+                } else if (action.equals("stopService")) {
                     isManuallyStopped = true;
-                    Intent intent = new Intent(this, WatchdogReceiver.class);
-                    PendingIntent pi;
-                    if (SDK_INT >= Build.VERSION_CODES.S) {
-                        pi = PendingIntent.getBroadcast(getApplicationContext(), 111, intent, PendingIntent.FLAG_CANCEL_CURRENT | PendingIntent.FLAG_MUTABLE);
-                    } else {
-                        pi = PendingIntent.getBroadcast(getApplicationContext(), 111, intent, PendingIntent.FLAG_CANCEL_CURRENT);
+                    try {
+                        updateBgServiceStatus(false, true);
+                    } catch (Exception e) {
+                        e.printStackTrace();
                     }
-                    AlarmManager alarmManager = (AlarmManager) getSystemService(ALARM_SERVICE);
-                    alarmManager.cancel(pi);
-                    stopTracking();
-                    stopSelf();
                 }
             } catch (Exception e) {
                 e.printStackTrace();
+                //App Event Log
+                String className = new Throwable()
+                        .getStackTrace()[0]
+                        .getClassName();
+                String methodName = new Throwable()
+                        .getStackTrace()[0]
+                        .getMethodName();
+                int lineNumber = new Throwable()
+                        .getStackTrace()[0]
+                        .getLineNumber();
+                String title = e.getLocalizedMessage();
+                String data2 = e.getMessage();
+                try {
+                    data2 = e.getMessage() + " # " + e.getCause().getMessage() + " # " +
+                            e.getStackTrace().toString();
+                } catch (Exception er) {
+                    er.printStackTrace();
+                }
+                addAppEventLog(LogType.DEBUG, LogTag.LOCATION_FETCH, title, data2,
+                        className, methodName, lineNumber);
             }
             try {
                 methodChannel.invokeMethod("onReceiveData", data);
             } catch (Exception e) {
                 e.printStackTrace();
+                //App Event Log
+                String className = new Throwable()
+                        .getStackTrace()[0]
+                        .getClassName();
+                String methodName = new Throwable()
+                        .getStackTrace()[0]
+                        .getMethodName();
+                int lineNumber = new Throwable()
+                        .getStackTrace()[0]
+                        .getLineNumber();
+                String title = e.getLocalizedMessage();
+                String data3 = e.getMessage();
+                try {
+                    data3 = e.getMessage() + " # " + e.getCause().getMessage() + " # " +
+                            e.getStackTrace().toString();
+                } catch (Exception er) {
+                    er.printStackTrace();
+                }
+                addAppEventLog(LogType.DEBUG, LogTag.LOCATION_FETCH, title, data3,
+                        className, methodName, lineNumber);
             }
         }
     }
-
 
     @Override
     public void onMethodCall(@NonNull MethodCall call, @NonNull MethodChannel.Result result) {
@@ -1007,10 +2039,11 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
                 } else {
                     pi = PendingIntent.getBroadcast(getApplicationContext(), 111, intent, PendingIntent.FLAG_CANCEL_CURRENT);
                 }
-                AlarmManager alarmManager = (AlarmManager) getSystemService(ALARM_SERVICE);
-                alarmManager.cancel(pi);
-                stopTracking();
-                stopSelf();
+                try {
+                    updateBgServiceStatus(false, true);
+                } catch (Exception e) {
+                    e.printStackTrace();
+                }
                 result.success(true);
                 return;
             }
@@ -1024,8 +2057,30 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
             }
 
         } catch (JSONException e) {
-            Log.e(TAG, e.getMessage());
+            if (isDebug) {
+                Log.e(TAG, e.getMessage());
+            }
             e.printStackTrace();
+            //App Event Log
+            String className = new Throwable()
+                    .getStackTrace()[0]
+                    .getClassName();
+            String methodName = new Throwable()
+                    .getStackTrace()[0]
+                    .getMethodName();
+            int lineNumber = new Throwable()
+                    .getStackTrace()[0]
+                    .getLineNumber();
+            String title = e.getLocalizedMessage();
+            String data = e.getMessage();
+            try {
+                data = e.getMessage() + " # " + e.getCause().getMessage() + " # " +
+                        e.getStackTrace().toString();
+            } catch (Exception er) {
+                er.printStackTrace();
+            }
+            addAppEventLog(LogType.DEBUG, LogTag.LOCATION_FETCH, title, data,
+                    className, methodName, lineNumber);
         }
 
         result.notImplemented();
@@ -1037,13 +2092,17 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
         public void onAvailable(@NonNull Network network) {
             super.onAvailable(network);
             connectMqtt();
-            Log.d(">>>> BGS conection >>>", "onAvailable(network)");
+            if (isDebug) {
+                Log.d(">>>> BGS conection >>>", "onAvailable(network)");
+            }
         }
 
         @Override
         public void onLost(@NonNull Network network) {
             super.onLost(network);
-            Log.d(">>>> BGS conection >>>", ".onLost(network)");
+            if (isDebug) {
+                Log.d(">>>> BGS conection >>>", ".onLost(network)");
+            }
         }
 
         @Override
@@ -1059,7 +2118,6 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
         BOOKING_CANCELLED,
         PAYMENT_DONE
     }
-
 
     protected void showNotification(NotificationType notificationType, String topic, String payload) {
         if (isForegroundService(this)) {
@@ -1101,12 +2159,52 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
                                 finalMediaPlayer = null;
                             } catch (Exception e) {
                                 e.printStackTrace();
+                                //App Event Log
+                                String className = new Throwable()
+                                        .getStackTrace()[0]
+                                        .getClassName();
+                                String methodName = new Throwable()
+                                        .getStackTrace()[0]
+                                        .getMethodName();
+                                int lineNumber = new Throwable()
+                                        .getStackTrace()[0]
+                                        .getLineNumber();
+                                String title = e.getLocalizedMessage();
+                                String data = e.getMessage();
+                                try {
+                                    data = e.getMessage() + " # " + e.getCause().getMessage() + " # " +
+                                            e.getStackTrace().toString();
+                                } catch (Exception er) {
+                                    er.printStackTrace();
+                                }
+                                addAppEventLog(LogType.DEBUG, LogTag.LOCATION_FETCH, title, data,
+                                        className, methodName, lineNumber);
                             }
                         });
                     }
-                } catch (Exception ex) {
+                } catch (Exception e) {
                     stopBookingSound();
                     updateNotificationInfo();
+                    //App Event Log
+                    String className = new Throwable()
+                            .getStackTrace()[0]
+                            .getClassName();
+                    String methodName = new Throwable()
+                            .getStackTrace()[0]
+                            .getMethodName();
+                    int lineNumber = new Throwable()
+                            .getStackTrace()[0]
+                            .getLineNumber();
+                    String title = e.getLocalizedMessage();
+                    String data = e.getMessage();
+                    try {
+                        data = e.getMessage() + " # " + e.getCause().getMessage() + " # " +
+                                e.getStackTrace().toString();
+                    } catch (Exception er) {
+                        er.printStackTrace();
+                    }
+                    addAppEventLog(LogType.DEBUG, LogTag.LOCATION_FETCH, title, data,
+                            className, methodName, lineNumber);
                 }
                 try {
 //                    final ByteArrayOutputStream out = new ByteArrayOutputStream();
@@ -1116,9 +2214,28 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
                     setLatLngList(this, emptyListStr);
                 } catch (Exception e) {
                     e.printStackTrace();
+                    //App Event Log
+                    String className = new Throwable()
+                            .getStackTrace()[0]
+                            .getClassName();
+                    String methodName = new Throwable()
+                            .getStackTrace()[0]
+                            .getMethodName();
+                    int lineNumber = new Throwable()
+                            .getStackTrace()[0]
+                            .getLineNumber();
+                    String title = e.getLocalizedMessage();
+                    String data = e.getMessage();
+                    try {
+                        data = e.getMessage() + " # " + e.getCause().getMessage() + " # " +
+                                e.getStackTrace().toString();
+                    } catch (Exception er) {
+                        er.printStackTrace();
+                    }
+                    addAppEventLog(LogType.DEBUG, LogTag.LOCATION_FETCH, title, data,
+                            className, methodName, lineNumber);
                 }
-            }
-            else if (notificationType == NotificationType.BOOKING_CANCELLED) {
+            } else if (notificationType == NotificationType.BOOKING_CANCELLED) {
                 NotificationCompat.Builder builder = new NotificationCompat.Builder(this, "FOREGROUND_DEFAULT")
                         .setSmallIcon(R.mipmap.ic_launcher)
                         .setContentTitle("Booking Cancelled")
@@ -1135,10 +2252,29 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
 
                 } catch (Exception e) {
                     e.printStackTrace();
+                    //App Event Log
+                    String className = new Throwable()
+                            .getStackTrace()[0]
+                            .getClassName();
+                    String methodName = new Throwable()
+                            .getStackTrace()[0]
+                            .getMethodName();
+                    int lineNumber = new Throwable()
+                            .getStackTrace()[0]
+                            .getLineNumber();
+                    String title = e.getLocalizedMessage();
+                    String data = e.getMessage();
+                    try {
+                        data = e.getMessage() + " # " + e.getCause().getMessage() + " # " +
+                                e.getStackTrace().toString();
+                    } catch (Exception er) {
+                        er.printStackTrace();
+                    }
+                    addAppEventLog(LogType.DEBUG, LogTag.LOCATION_FETCH, title, data,
+                            className, methodName, lineNumber);
                 }
 
-            }
-            else if (notificationType == NotificationType.PAYMENT_DONE) {
+            } else if (notificationType == NotificationType.PAYMENT_DONE) {
                 NotificationCompat.Builder builder = new NotificationCompat.Builder(this, "FOREGROUND_DEFAULT")
                         .setSmallIcon(R.mipmap.ic_launcher)
                         .setContentTitle("Payment Completed")
@@ -1147,6 +2283,91 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
                         .addAction(R.drawable.ic_open_app, getString(R.string.openapp), pi);
                 startForeground(99778, builder.build());
             }
+        }
+    }
+
+    enum LogType {
+        INFO,
+        WARNING,
+        DEBUG,
+        EXCEPTION,
+        ERROR
+    }
+
+    enum LogTag {
+        SERVICE_STARTED,
+        SERVICE_RUNNING,
+        SERVICE_ENDED,
+        MQ_CONNECTED,
+        MQ_DISCONNECTED,
+        MQ_CONNECT_TRY,
+        NETWORK_CONNECTED,
+        NETWORK_DISCONNECTED,
+        MQ_MSG_RECEIVED,
+        MQ_MSG_PUBLISHED,
+        MQ_MSG_TO_FLUTTER_APP,
+        REST_API_CALL,
+        LOCATION_FETCH
+    }
+
+    //new Throwable().getStackTrace()[0].getLineNumber()
+    void addAppEventLog(LogType logType, LogTag logTag,
+                        String title, String data,
+                        String className, String methodName, int lineNo) {
+        try {
+            /*Create handle for the RetrofitInstance interface*/
+            String token = getApiTokenValue(this);
+            if (token != null && token.length() > 10) {
+                AppEventLog appEventLog = new AppEventLog();
+                try {
+                    String userIdStr = getDriverId(this);
+                    appEventLog.user_id = Long.parseLong(userIdStr != null && userIdStr.length() > 0 ?
+                            userIdStr : "0");
+                    appEventLog.class_name = className;
+                    appEventLog.method_name = methodName;
+                    appEventLog.line_no = String.valueOf(lineNo);
+                    appEventLog.log_type = logType.name();
+                    appEventLog.tag = logTag.name();
+                    appEventLog.title = title;
+                    appEventLog.data = data;
+                    appEventLog.is_mq_alive = isMqAlive;
+                    appEventLog.source = "BGService";
+                    appEventLog.app_state = getAppStateValue(this);
+                    ;
+                    appEventLog.token = token;
+                    appEventLog.ride_ref_no = BackgroundService.rideReferenceNo;
+                    SimpleDateFormat formatter = new SimpleDateFormat("yyyy-MM-dd hh:mm:ss");
+                    appEventLog.created_time = formatter.format(new Date());
+                    appEventLog.loc_lat = currentLocation != null ? currentLocation.getLatitude() : 0.0;
+                    appEventLog.loc_lng = currentLocation != null ? currentLocation.getLongitude() : 0.0;
+                } catch (Exception e) {
+                    e.printStackTrace();
+                }
+
+                ApiEndpoints apiEndpoints = RetrofitClientInstance.getRetrofitInstance(token).create(ApiEndpoints.class);
+                if(apiEndpoints != null){
+                    Call<AppEventLog> call = apiEndpoints.addAppEventLog(appEventLog);
+
+                    call.enqueue(new Callback<AppEventLog>() {
+                        @Override
+                        public void onResponse(Call<AppEventLog> call, Response<AppEventLog> response) {
+                            if (isDebug) {
+                                Log.d(">>> ApiCall-Success >", response.toString());
+                            }
+                        }
+
+                        @Override
+                        public void onFailure(Call<AppEventLog> call, Throwable t) {
+                            if (isDebug) {
+                                Log.d(">>> ApiCall-Failed > ", t.getMessage());
+                            }
+                        }
+                    });
+                }
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+            //App Event Log
         }
     }
 
