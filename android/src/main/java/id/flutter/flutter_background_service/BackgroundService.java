@@ -1803,8 +1803,12 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
             if (top.startsWith(ENV_PREFIX + "/" + "rd/rq/ak/")) {
                 String[] parts = message.split("#");
                 String cmd = parts[0].toString().toUpperCase();
-                if (cmd.equals("RQAA") || cmd.equals("RQAP")) {
+                if (cmd.equals("RQAA")) {
                     resetBookingCounterTimer();
+                }else if (cmd.equals("RQAP")){
+                    resetBookingCounterTimer();
+                    String dId = getDriverId(this);
+                    subscribeTopic(ENV_PREFIX + "/" + "rd/rq/"+dId);
                 }
             } else if (top.startsWith(ENV_PREFIX + "/" + "rd/cr/")) {
                 String[] parts = message.split("#");
@@ -2273,8 +2277,8 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
                     addAppEventLog(LogType.DEBUG, LogTag.LOCATION_FETCH, title, data,
                             className, methodName, lineNumber);
                 }
-
-            } else if (notificationType == NotificationType.PAYMENT_DONE) {
+            }
+            else if (notificationType == NotificationType.PAYMENT_DONE) {
                 NotificationCompat.Builder builder = new NotificationCompat.Builder(this, "FOREGROUND_DEFAULT")
                         .setSmallIcon(R.mipmap.ic_launcher)
                         .setContentTitle("Payment Completed")
