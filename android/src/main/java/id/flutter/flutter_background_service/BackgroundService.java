@@ -103,6 +103,7 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
     String notificationContent = "...";
     MediaPlayer finalMediaPlayer;
     static boolean isDebug = false;
+    Date lastUpdatedTime = new Date();
 
     private static final String LOCK_NAME = BackgroundService.class.getName() + ".Lock";
     private static volatile WakeLock lockStatic = null; // notice static
@@ -508,53 +509,109 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
             }
         }
         try {
-            /*Create handle for the RetrofitInstance interface*/
-            String token = getApiTokenValue(this);
-            if (token != null && token.length() > 10) {
-                ApiEndpoints apiEndpoints = RetrofitClientInstance.getRetrofitInstance(token).create(ApiEndpoints.class);
-                if(apiEndpoints != null){
-                    Call<DriverLocation> call = apiEndpoints.updateDriverLocation(
-                            new DriverLocation(),
-                            location.getLatitude(),
-                            location.getLongitude(),
-                            getDriverId(this));
+            if (appState.equals("12")) {
+                /*Create handle for the RetrofitInstance interface*/
+                String token = getApiTokenValue(this);
+                if (token != null && token.length() > 10) {
+                    ApiEndpoints apiEndpoints = RetrofitClientInstance.getRetrofitInstance(token).create(ApiEndpoints.class);
+                    if(apiEndpoints != null){
+                        Call<DriverLocation> call = apiEndpoints.updateDriverLocation(
+                                new DriverLocation(),
+                                location.getLatitude(),
+                                location.getLongitude(),
+                                getDriverId(this));
 
-                    call.enqueue(new Callback<DriverLocation>() {
-                        @Override
-                        public void onResponse(Call<DriverLocation> call, Response<DriverLocation> response) {
-                            if (isDebug)
-                                Log.d(">>> ApiCall-Success >", response.toString());
-                        }
-
-                        @Override
-                        public void onFailure(Call<DriverLocation> call, Throwable t) {
-                            if (isDebug) {
-                                Log.d(">>> ApiCall-Failed > ", t.getMessage());
+                        call.enqueue(new Callback<DriverLocation>() {
+                            @Override
+                            public void onResponse(Call<DriverLocation> call, Response<DriverLocation> response) {
+                                if (isDebug)
+                                    Log.d(">>> ApiCall-Success >", response.toString());
                             }
 
-                            //App Event Log
-                            String className = new Throwable()
-                                    .getStackTrace()[0]
-                                    .getClassName();
-                            String methodName = new Throwable()
-                                    .getStackTrace()[0]
-                                    .getMethodName();
-                            int lineNumber = new Throwable()
-                                    .getStackTrace()[0]
-                                    .getLineNumber();
-                            String title = t.getLocalizedMessage();
-                            String data = t.getMessage();
-                            try {
-                                data = t.getMessage() + " # " + t.getCause().getMessage() + " # " + t.getStackTrace().toString();
-                            } catch (Exception e) {
-                                e.printStackTrace();
+                            @Override
+                            public void onFailure(Call<DriverLocation> call, Throwable t) {
+                                if (isDebug) {
+                                    Log.d(">>> ApiCall-Failed > ", t.getMessage());
+                                }
+
+                                //App Event Log
+                                String className = new Throwable()
+                                        .getStackTrace()[0]
+                                        .getClassName();
+                                String methodName = new Throwable()
+                                        .getStackTrace()[0]
+                                        .getMethodName();
+                                int lineNumber = new Throwable()
+                                        .getStackTrace()[0]
+                                        .getLineNumber();
+                                String title = t.getLocalizedMessage();
+                                String data = t.getMessage();
+                                try {
+                                    data = t.getMessage() + " # " + t.getCause().getMessage() + " # " + t.getStackTrace().toString();
+                                } catch (Exception e) {
+                                    e.printStackTrace();
+                                }
+                                addAppEventLog(LogType.ERROR, LogTag.REST_API_CALL, title, data,
+                                        className, methodName, lineNumber);
                             }
-                            addAppEventLog(LogType.ERROR, LogTag.REST_API_CALL, title, data,
-                                    className, methodName, lineNumber);
+                        });
+                    }
+                }
+            }else{
+                Date nowTime = new Date();
+                long  diff = (nowTime.getTime() -lastUpdatedTime.getTime()) / 1000;
+                if(diff >= 300){
+                    lastUpdatedTime = nowTime;
+                    /*Create handle for the RetrofitInstance interface*/
+                    String token = getApiTokenValue(this);
+                    if (token != null && token.length() > 10) {
+                        ApiEndpoints apiEndpoints = RetrofitClientInstance.getRetrofitInstance(token).create(ApiEndpoints.class);
+                        if(apiEndpoints != null){
+                            Call<DriverLocation> call = apiEndpoints.updateDriverLocation(
+                                    new DriverLocation(),
+                                    location.getLatitude(),
+                                    location.getLongitude(),
+                                    getDriverId(this));
+
+                            call.enqueue(new Callback<DriverLocation>() {
+                                @Override
+                                public void onResponse(Call<DriverLocation> call, Response<DriverLocation> response) {
+                                    if (isDebug)
+                                        Log.d(">>> ApiCall-Success >", response.toString());
+                                }
+
+                                @Override
+                                public void onFailure(Call<DriverLocation> call, Throwable t) {
+                                    if (isDebug) {
+                                        Log.d(">>> ApiCall-Failed > ", t.getMessage());
+                                    }
+
+                                    //App Event Log
+                                    String className = new Throwable()
+                                            .getStackTrace()[0]
+                                            .getClassName();
+                                    String methodName = new Throwable()
+                                            .getStackTrace()[0]
+                                            .getMethodName();
+                                    int lineNumber = new Throwable()
+                                            .getStackTrace()[0]
+                                            .getLineNumber();
+                                    String title = t.getLocalizedMessage();
+                                    String data = t.getMessage();
+                                    try {
+                                        data = t.getMessage() + " # " + t.getCause().getMessage() + " # " + t.getStackTrace().toString();
+                                    } catch (Exception e) {
+                                        e.printStackTrace();
+                                    }
+                                    addAppEventLog(LogType.ERROR, LogTag.REST_API_CALL, title, data,
+                                            className, methodName, lineNumber);
+                                }
+                            });
                         }
-                    });
+                    }
                 }
             }
+
         } catch (Exception e) {
             e.printStackTrace();
             //App Event Log
@@ -596,6 +653,25 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
                         public void onResponse(Call<DriverLocation> call, Response<DriverLocation> response) {
                             if (isDebug)
                                 Log.d(">>> ApiCall-Success >", response.toString());
+
+                            try {
+                                //App Event Log
+                                String className = new Throwable()
+                                        .getStackTrace()[0]
+                                        .getClassName();
+                                String methodName = new Throwable()
+                                        .getStackTrace()[0]
+                                        .getMethodName();
+                                int lineNumber = new Throwable()
+                                        .getStackTrace()[0]
+                                        .getLineNumber();
+                                String title = "TESTING-MQ";
+                                String data = "TESTING-MQ = "+isMqAlive;
+                                addAppEventLog(LogType.ERROR, LogTag.REST_API_CALL, title, data,
+                                        className, methodName, lineNumber);
+                            } catch (Exception e) {
+                                e.printStackTrace();
+                            }
                         }
 
                         @Override
@@ -694,6 +770,26 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
                         public void onResponse(Call<DriverLocation> call, Response<DriverLocation> response) {
                             if (isDebug)
                                 Log.d(">>> ApiCall-Success >", response.toString());
+
+                            try {
+                                //App Event Log
+                                String className = new Throwable()
+                                        .getStackTrace()[0]
+                                        .getClassName();
+                                String methodName = new Throwable()
+                                        .getStackTrace()[0]
+                                        .getMethodName();
+                                int lineNumber = new Throwable()
+                                        .getStackTrace()[0]
+                                        .getLineNumber();
+                                String title = "TESTING-BG_Service";
+                                String data = "TESTING-BG_Service = "+isBgServiceAlive+" = "+isManualStop;
+                                addAppEventLog(LogType.ERROR, LogTag.REST_API_CALL, title, data,
+                                        className, methodName, lineNumber);
+                            } catch (Exception e) {
+                                e.printStackTrace();
+                            }
+
                             if (isManualStop) {
                                 stopBackgroundService();
                             }
