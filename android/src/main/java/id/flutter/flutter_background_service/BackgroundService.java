@@ -17,11 +17,13 @@ import android.net.ConnectivityManager;
 import android.net.Network;
 import android.net.NetworkCapabilities;
 import android.net.NetworkRequest;
+import android.net.Uri;
 import android.os.Build;
 import android.os.IBinder;
 import android.os.Looper;
 import android.os.PowerManager;
 import android.os.PowerManager.WakeLock;
+import android.provider.Settings;
 import android.util.Log;
 
 import androidx.annotation.NonNull;
@@ -117,8 +119,8 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
     public static String tripType;
     public static String tpType;
     public static String customerId = "0";
-    final String ENV_PREFIX = "s"; // Stage
-//    final String ENV_PREFIX = "p"; // Production
+   final String ENV_PREFIX = "s"; // Stage
+    // final String ENV_PREFIX = "p"; // Production
 
     {
         topicList = new HashSet<>();
@@ -560,7 +562,7 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
             }else{
                 Date nowTime = new Date();
                 long  diff = (nowTime.getTime() -lastUpdatedTime.getTime()) / 1000;
-                if(diff >= 300){
+                if(diff >= 60){
                     lastUpdatedTime = nowTime;
                     /*Create handle for the RetrofitInstance interface*/
                     String token = getApiTokenValue(this);
@@ -641,7 +643,7 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
         try {
             /*Create handle for the RetrofitInstance interface*/
             String token = getApiTokenValue(this);
-//            if (token != null && token.length() > 10) {
+            if (token != null && token.length() > 10) {
                 ApiEndpoints apiEndpoints = RetrofitClientInstance.getRetrofitInstance(token).create(ApiEndpoints.class);
                 if(apiEndpoints != null){
                     Call<DriverLocation> call = apiEndpoints.updateDriverMqStatus(
@@ -703,7 +705,7 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
                         }
                     });
                 }
-//            }
+            }
         } catch (Exception e) {
             e.printStackTrace();
             //App Event Log
@@ -2011,6 +2013,7 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
                     }
                     ApiEndpoints apiEndpoints = RetrofitClientInstance.getRetrofitInstance(apiToken).create(ApiEndpoints.class);
                     updateDriverMQStatus();
+                    updateBgServiceStatus(true,false);
                 } else if (action.equals("setAppStateValue")) {
                     String appStateValue = data.getString("app_state_value");
                     String locUpdateTopicOnline = data.getString("loc_update_topic_online");
