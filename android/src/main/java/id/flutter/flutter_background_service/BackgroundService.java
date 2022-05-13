@@ -19,8 +19,10 @@ import android.net.NetworkCapabilities;
 import android.net.NetworkRequest;
 import android.net.Uri;
 import android.os.Build;
+import android.os.Handler;
 import android.os.IBinder;
 import android.os.Looper;
+import android.os.Message;
 import android.os.PowerManager;
 import android.os.PowerManager.WakeLock;
 import android.provider.Settings;
@@ -30,6 +32,7 @@ import androidx.annotation.NonNull;
 import androidx.annotation.RequiresApi;
 import androidx.core.app.AlarmManagerCompat;
 import androidx.core.app.NotificationCompat;
+import androidx.core.content.ContextCompat;
 import androidx.localbroadcastmanager.content.LocalBroadcastManager;
 
 
@@ -109,10 +112,13 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
 
     private static final String LOCK_NAME = BackgroundService.class.getName() + ".Lock";
     private static volatile WakeLock lockStatic = null; // notice static
+    //Location
     private LocationRequest locationRequest;
     private FusedLocationProviderClient fusedLocationProviderClient;
     private LocationCallback locationCallback;
     private Location currentLocation;
+    private boolean isTrackLocRemotly = false;
+    //
     private PowerManager.WakeLock wakeLock;
     public static String rideReferenceNo;
     public static String messageOnNewTrip;
@@ -207,7 +213,7 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
         };
         createLocationRequest();
         getLastLocation();
-        startTracking();
+//        startTracking();
         periodicUpdateIsBgService();
         updateNotificationInfo();
 
@@ -229,16 +235,16 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
     Timer infiniteTimer;
 
     void periodicUpdateIsBgService() {
-        infiniteTimer = new Timer();
-        int PERIOD = 120;
-        infiniteTimer.schedule(new TimerTask() {
-            @Override
-            public void run() {
-                if(infiniteTimer != null){
-                    updateBgServiceStatus(true, false);
-                }
-            }
-        }, PERIOD * 1000, PERIOD * 1000);
+//        infiniteTimer = new Timer();
+//        int PERIOD = 120;
+//        infiniteTimer.schedule(new TimerTask() {
+//            @Override
+//            public void run() {
+//                if(infiniteTimer != null){
+//                    updateBgServiceStatus(true, false);
+//                }
+//            }
+//        }, PERIOD * 1000, PERIOD * 1000);
     }
 
     // Location tracking >>>>>
@@ -293,6 +299,15 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
 
     private void onNewLocation(Location location) {
         this.currentLocation = location;
+        if(isTrackLocRemotly){
+            isTrackLocRemotly = false;
+            stopTracking();
+
+            String driverId = getDriverId(this);
+            String payloadVal = driverId + "=" + this.currentLocation.getLatitude() + "=" + this.currentLocation.getLongitude() + "=";
+            publishMessage(ENV_PREFIX + "/drivers/location/req/ack/" + driverId, payloadVal);
+            return;
+        }
         updateNotificationInfo(location.toString());
         JSONObject mqData = new JSONObject();
 
@@ -773,25 +788,6 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
                             if (isDebug)
                                 Log.d(">>> ApiCall-Success >", response.toString());
 
-                            try {
-                                //App Event Log
-                                String className = new Throwable()
-                                        .getStackTrace()[0]
-                                        .getClassName();
-                                String methodName = new Throwable()
-                                        .getStackTrace()[0]
-                                        .getMethodName();
-                                int lineNumber = new Throwable()
-                                        .getStackTrace()[0]
-                                        .getLineNumber();
-                                String title = "TESTING-BG_Service";
-                                String data = "TESTING-BG_Service = "+isBgServiceAlive+" = "+isManualStop;
-                                addAppEventLog(LogType.ERROR, LogTag.REST_API_CALL, title, data,
-                                        className, methodName, lineNumber);
-                            } catch (Exception e) {
-                                e.printStackTrace();
-                            }
-
                             if (isManualStop) {
                                 stopBackgroundService();
                             }
@@ -801,33 +797,6 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
                         public void onFailure(Call<DriverLocation> call, Throwable t) {
                             if (isDebug) {
                                 Log.d(">>> ApiCall-Failed > ", t.getMessage());
-                            }
-                            try {
-                                //App Event Log
-                                String className = new Throwable()
-                                        .getStackTrace()[0]
-                                        .getClassName();
-                                String methodName = new Throwable()
-                                        .getStackTrace()[0]
-                                        .getMethodName();
-                                int lineNumber = new Throwable()
-                                        .getStackTrace()[0]
-                                        .getLineNumber();
-                                String title = t.getLocalizedMessage() + " --- "
-                                        + (isMqAlive ? LogTag.MQ_CONNECTED.toString() : LogTag.MQ_DISCONNECTED.toString());
-                                String data = t.getMessage();
-                                try {
-                                    data = t.getMessage() + " # " + t.getCause().getMessage() + " # " + t.getStackTrace().toString();
-                                } catch (Exception e) {
-                                    e.printStackTrace();
-                                }
-                                addAppEventLog(LogType.ERROR, LogTag.REST_API_CALL, title, data,
-                                        className, methodName, lineNumber);
-                            } catch (Exception e) {
-                                e.printStackTrace();
-                            }
-                            if (isManualStop) {
-                                stopBackgroundService();
                             }
                         }
                     });
@@ -1447,6 +1416,7 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
                     String driverId = getDriverId(this);
                     if(driverId != null && driverId.length() > 0){
                         subscribeTopic(ENV_PREFIX + "/rd/handshake/" + driverId);
+                        subscribeTopic(ENV_PREFIX + "/drivers/location/req/" + driverId);
                     }
                 } catch (Exception e) {
                     e.printStackTrace();
@@ -1821,6 +1791,12 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
                             String driverId = getDriverId(this);
                             String[] vals = payload.split("=");
                             publishMessage(ENV_PREFIX + "/rd/handshake/ack/" + vals[0], driverId + "|");
+                        } else if (topic.startsWith(ENV_PREFIX + "/drivers/location/req/")) {
+                            // check in payload its a payment done or not
+                            isTrackLocRemotly = true;
+                            ContextCompat.getMainExecutor(this).execute(()  -> {
+                                startTracking();
+                            });
                         }
 
                         if (methodChannel != null) {
@@ -1908,12 +1884,16 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
                     String dId = getDriverId(this);
                     subscribeTopic(ENV_PREFIX + "/" + "rd/rq/"+dId);
                 }
-            } else if (top.startsWith(ENV_PREFIX + "/" + "rd/cr/")) {
+            }
+            else if (top.startsWith(ENV_PREFIX + "/" + "rd/cr/")) {
                 String[] parts = message.split("#");
                 String cmd = parts[0].toString().toUpperCase();
                 if (cmd.equals("RDCT")) {
+                    stopTracking();
                     String emptyListStr = "[]"; // new String(data)
                     setLatLngList(this, emptyListStr);
+                }else if(cmd.equals("RDST")){
+                    startTracking();
                 }
             }
         } catch (Exception e) {
@@ -2010,6 +1990,7 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
                     setApiTokenValue(apiToken);
                     if(driverId != null && driverId.length() > 0){
                         subscribeTopic(ENV_PREFIX + "/rd/handshake/" + driverId);
+                        subscribeTopic(ENV_PREFIX + "/drivers/location/req/" + driverId);
                     }
                     ApiEndpoints apiEndpoints = RetrofitClientInstance.getRetrofitInstance(apiToken).create(ApiEndpoints.class);
                     updateDriverMQStatus();
