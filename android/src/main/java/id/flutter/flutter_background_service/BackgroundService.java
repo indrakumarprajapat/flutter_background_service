@@ -11,6 +11,7 @@ import android.app.Service;
 import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
+import android.graphics.BitmapFactory;
 import android.location.Location;
 import android.media.MediaPlayer;
 import android.net.ConnectivityManager;
@@ -119,8 +120,10 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
     public static String tripType;
     public static String tpType;
     public static String customerId = "0";
-   final String ENV_PREFIX = "s"; // Stage
+    final String ENV_PREFIX = "s"; // Stage
     // final String ENV_PREFIX = "p"; // Production
+    NotificationManager bookingnotificationManager;
+
 
     {
         topicList = new HashSet<>();
@@ -226,6 +229,7 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
         addAppEventLog(LogType.DEBUG, LogTag.SERVICE_STARTED, title, data,
                 className, methodName, lineNumber);
     }
+
     Timer infiniteTimer;
 
     void periodicUpdateIsBgService() {
@@ -234,7 +238,7 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
         infiniteTimer.schedule(new TimerTask() {
             @Override
             public void run() {
-                if(infiniteTimer != null){
+                if (infiniteTimer != null) {
                     updateBgServiceStatus(true, false);
                 }
             }
@@ -516,7 +520,7 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
                 String token = getApiTokenValue(this);
                 if (token != null && token.length() > 10) {
                     ApiEndpoints apiEndpoints = RetrofitClientInstance.getRetrofitInstance(token).create(ApiEndpoints.class);
-                    if(apiEndpoints != null){
+                    if (apiEndpoints != null) {
                         Call<DriverLocation> call = apiEndpoints.updateDriverLocation(
                                 new DriverLocation(),
                                 location.getLatitude(),
@@ -559,16 +563,16 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
                         });
                     }
                 }
-            }else{
+            } else {
                 Date nowTime = new Date();
-                long  diff = (nowTime.getTime() -lastUpdatedTime.getTime()) / 1000;
-                if(diff >= 60){
+                long diff = (nowTime.getTime() - lastUpdatedTime.getTime()) / 1000;
+                if (diff >= 60) {
                     lastUpdatedTime = nowTime;
                     /*Create handle for the RetrofitInstance interface*/
                     String token = getApiTokenValue(this);
                     if (token != null && token.length() > 10) {
                         ApiEndpoints apiEndpoints = RetrofitClientInstance.getRetrofitInstance(token).create(ApiEndpoints.class);
-                        if(apiEndpoints != null){
+                        if (apiEndpoints != null) {
                             Call<DriverLocation> call = apiEndpoints.updateDriverLocation(
                                     new DriverLocation(),
                                     location.getLatitude(),
@@ -645,7 +649,7 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
             String token = getApiTokenValue(this);
             if (token != null && token.length() > 10) {
                 ApiEndpoints apiEndpoints = RetrofitClientInstance.getRetrofitInstance(token).create(ApiEndpoints.class);
-                if(apiEndpoints != null){
+                if (apiEndpoints != null) {
                     Call<DriverLocation> call = apiEndpoints.updateDriverMqStatus(
                             new DriverLocation(),
                             isMqAlive ? 1 : 0,
@@ -668,7 +672,7 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
                                         .getStackTrace()[0]
                                         .getLineNumber();
                                 String title = "TESTING-MQ";
-                                String data = "TESTING-MQ = "+isMqAlive;
+                                String data = "TESTING-MQ = " + isMqAlive;
                                 addAppEventLog(LogType.ERROR, LogTag.REST_API_CALL, title, data,
                                         className, methodName, lineNumber);
                             } catch (Exception e) {
@@ -732,7 +736,7 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
     }
 
     public void stopBackgroundService() {
-        if(infiniteTimer!=null){
+        if (infiniteTimer != null) {
             infiniteTimer.cancel();
             infiniteTimer = null;
         }
@@ -749,7 +753,7 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
             stopTracking();
             stopSelf();
 
-        }catch (Exception e){
+        } catch (Exception e) {
             e.printStackTrace();
         }
     }
@@ -760,7 +764,7 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
             String token = getApiTokenValue(this);
             if (token != null && token.length() > 10) {
                 ApiEndpoints apiEndpoints = RetrofitClientInstance.getRetrofitInstance(token).create(ApiEndpoints.class);
-                if(apiEndpoints != null){
+                if (apiEndpoints != null) {
                     Call<DriverLocation> call = apiEndpoints.updateBgServiceStatus(
                             new DriverLocation(),
                             isBgServiceAlive ? 1 : 0,
@@ -785,7 +789,7 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
                                         .getStackTrace()[0]
                                         .getLineNumber();
                                 String title = "TESTING-BG_Service";
-                                String data = "TESTING-BG_Service = "+isBgServiceAlive+" = "+isManualStop;
+                                String data = "TESTING-BG_Service = " + isBgServiceAlive + " = " + isManualStop;
                                 addAppEventLog(LogType.ERROR, LogTag.REST_API_CALL, title, data,
                                         className, methodName, lineNumber);
                             } catch (Exception e) {
@@ -1445,7 +1449,7 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
                 try {
                     localBroadcastManager(mqData, ">>> BGS onMqttConnected", "sent onMqttConnected is connected");
                     String driverId = getDriverId(this);
-                    if(driverId != null && driverId.length() > 0){
+                    if (driverId != null && driverId.length() > 0) {
                         subscribeTopic(ENV_PREFIX + "/rd/handshake/" + driverId);
                     }
                 } catch (Exception e) {
@@ -1903,10 +1907,10 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
                 String cmd = parts[0].toString().toUpperCase();
                 if (cmd.equals("RQAA")) {
                     resetBookingCounterTimer();
-                }else if (cmd.equals("RQAP")){
+                } else if (cmd.equals("RQAP")) {
                     resetBookingCounterTimer();
                     String dId = getDriverId(this);
-                    subscribeTopic(ENV_PREFIX + "/" + "rd/rq/"+dId);
+                    subscribeTopic(ENV_PREFIX + "/" + "rd/rq/" + dId);
                 }
             } else if (top.startsWith(ENV_PREFIX + "/" + "rd/cr/")) {
                 String[] parts = message.split("#");
@@ -2008,12 +2012,12 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
                     String apiToken = data.getString("api_token");
                     setDriverId(driverId);
                     setApiTokenValue(apiToken);
-                    if(driverId != null && driverId.length() > 0){
+                    if (driverId != null && driverId.length() > 0) {
                         subscribeTopic(ENV_PREFIX + "/rd/handshake/" + driverId);
                     }
                     ApiEndpoints apiEndpoints = RetrofitClientInstance.getRetrofitInstance(apiToken).create(ApiEndpoints.class);
                     updateDriverMQStatus();
-                    updateBgServiceStatus(true,false);
+                    updateBgServiceStatus(true, false);
                 } else if (action.equals("setAppStateValue")) {
                     String appStateValue = data.getString("app_state_value");
                     String locUpdateTopicOnline = data.getString("loc_update_topic_online");
@@ -2227,28 +2231,33 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
 
             String packageName = getApplicationContext().getPackageName();
             Intent intent = getPackageManager().getLaunchIntentForPackage(packageName);
-            intent.putExtra("FOREGROUND_DEFAULT", 0);
 
-            PendingIntent pi;
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                pi = PendingIntent.getActivity(BackgroundService.this, 99778, intent, PendingIntent.FLAG_CANCEL_CURRENT | PendingIntent.FLAG_MUTABLE);
-            } else {
-                pi = PendingIntent.getActivity(BackgroundService.this, 99778, intent, PendingIntent.FLAG_CANCEL_CURRENT);
-            }
+            PendingIntent pi = PendingIntent.getActivity(this, 0, intent, PendingIntent.FLAG_MUTABLE);
+
 
             if (notificationType == NotificationType.BOOKING_REQUEST) {
 
-                NotificationCompat.Builder builder = new NotificationCompat.Builder(this, "FOREGROUND_DEFAULT")
+
+                NotificationCompat.Builder builder = new NotificationCompat.Builder(this, "FOREGROUND_DEFAULT_BOOKING")
                         .setSmallIcon(R.mipmap.ic_launcher)
                         .setContentTitle("New Booking Request")
-                        .setContentText(payload)
-                        .setPriority(NotificationCompat.PRIORITY_DEFAULT)
-                        .addAction(R.drawable.ic_accept, getString(R.string.accept), pi)
-                        .addAction(R.drawable.ic_pass, getString(R.string.pass), pi)
-                        .setContentIntent(pi)
-                        .setAutoCancel(true);
+                        .setStyle(new NotificationCompat.BigTextStyle().bigText(payload))
+                        .setPriority(NotificationCompat.PRIORITY_HIGH)
+                        .setTimeoutAfter(30000)
+                        .setAutoCancel(true)
+                        .setDefaults(NotificationCompat.DEFAULT_ALL)
+                        .setLargeIcon(BitmapFactory.decodeResource(this.getResources(), R.mipmap.ic_launcher))
+                        .addAction(R.drawable.ic_accept, getString(R.string.openapp), pi)
+                        .setFullScreenIntent(pi, true);
+//                      .addAction(R.drawable.ic_pass, getString(R.string.pass), pi);
+//                      .setFullScreenIntent(pi, true);
 
-                startForeground(99778, builder.build());
+                buildChannel();
+
+                bookingnotificationManager.notify(101, builder.build());
+
+//                  startForeground(99778, builder.build());
+
 
                 finalMediaPlayer = MediaPlayer.create(this, R.raw.booking);
                 try {
@@ -2376,8 +2385,7 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
                     addAppEventLog(LogType.DEBUG, LogTag.LOCATION_FETCH, title, data,
                             className, methodName, lineNumber);
                 }
-            }
-            else if (notificationType == NotificationType.PAYMENT_DONE) {
+            } else if (notificationType == NotificationType.PAYMENT_DONE) {
                 NotificationCompat.Builder builder = new NotificationCompat.Builder(this, "FOREGROUND_DEFAULT")
                         .setSmallIcon(R.mipmap.ic_launcher)
                         .setContentTitle("Payment Completed")
@@ -2448,7 +2456,7 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
                 }
 
                 ApiEndpoints apiEndpoints = RetrofitClientInstance.getRetrofitInstance(token).create(ApiEndpoints.class);
-                if(apiEndpoints != null){
+                if (apiEndpoints != null) {
                     Call<AppEventLog> call = apiEndpoints.addAppEventLog(appEventLog);
 
                     call.enqueue(new Callback<AppEventLog>() {
@@ -2667,6 +2675,20 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
         return pref.getString("ridelatlnglist", "");
     }
 
+    private void buildChannel() {
+        if (SDK_INT >= Build.VERSION_CODES.O) {
+            String name = "Background Service -- booking";
+            String description = "Executing process in background --booking ";
+
+            int importance = NotificationManager.IMPORTANCE_HIGH;
+
+            NotificationChannel channel = new NotificationChannel("FOREGROUND_DEFAULT_BOOKING", name, importance);
+            channel.setDescription(description);
+
+            bookingnotificationManager = (NotificationManager) getSystemService(this.NOTIFICATION_SERVICE);
+            bookingnotificationManager.createNotificationChannel(channel);
+        }
+    }
 }
 
 class LatLng {
