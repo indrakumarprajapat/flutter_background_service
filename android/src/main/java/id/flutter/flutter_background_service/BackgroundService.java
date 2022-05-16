@@ -109,7 +109,6 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
     String notificationContent = "...";
     MediaPlayer finalMediaPlayer;
     static boolean isDebug = false;
-    Date lastUpdatedTime = new Date();
 
     private static final String LOCK_NAME = BackgroundService.class.getName() + ".Lock";
     private static volatile WakeLock lockStatic = null; // notice static
@@ -126,8 +125,6 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
     public static String tripType;
     public static String tpType;
     public static String customerId = "0";
-    final String ENV_PREFIX = "s"; // Stage
-    // final String ENV_PREFIX = "p"; // Production
     NotificationManager bookingnotificationManager;
 
 
@@ -309,7 +306,7 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
 
             String driverId = getDriverId(this);
             String payloadVal = driverId + "=" + this.currentLocation.getLatitude() + "=" + this.currentLocation.getLongitude() + "=";
-            publishMessage(ENV_PREFIX + "/drivers/location/req/ack/" + driverId, payloadVal);
+            publishMessage(Constants.MQ_ENV_PREFIX + "/drivers/location/req/ack/" + driverId, payloadVal);
             return;
         }
         updateNotificationInfo(location.toString());
@@ -366,14 +363,14 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
             if (appState.equals("6") || appState.equals("12")) {
                 String locUpdateTopicOnride = getLocUpdateTopicOnRide(this);
                 if (!locUpdateTopicOnride.isEmpty()) {
-                    publishMessage(ENV_PREFIX + "/" + locUpdateTopicOnride, locUpdatePayload);
+                    publishMessage(Constants.MQ_ENV_PREFIX + "/" + locUpdateTopicOnride, locUpdatePayload);
                 }
             } else {
                 String locUpdateTopicOnline = getLocUpdateTopicOnline(this);
                 if (locUpdateTopicOnline.isEmpty()) {
-                    locUpdateTopicOnline = ENV_PREFIX + "/drivers_curr_loc/" + getDriverId(this) + "/newlocQoS";
+                    locUpdateTopicOnline = Constants.MQ_ENV_PREFIX + "/drivers_curr_loc/" + getDriverId(this) + "/newlocQoS";
                 }
-                publishMessage(ENV_PREFIX + "/" + locUpdateTopicOnline, locUpdatePayload);
+                publishMessage(Constants.MQ_ENV_PREFIX + "/" + locUpdateTopicOnline, locUpdatePayload);
 
             }
         } catch (Exception e) {
@@ -579,10 +576,6 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
                     }
                 }
             } else {
-                Date nowTime = new Date();
-                long diff = (nowTime.getTime() - lastUpdatedTime.getTime()) / 1000;
-                if (diff >= 60) {
-                    lastUpdatedTime = nowTime;
                     /*Create handle for the RetrofitInstance interface*/
                     String token = getApiTokenValue(this);
                     if (token != null && token.length() > 10) {
@@ -630,7 +623,6 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
                             });
                         }
                     }
-                }
             }
 
         } catch (Exception e) {
@@ -1419,8 +1411,8 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
                     localBroadcastManager(mqData, ">>> BGS onMqttConnected", "sent onMqttConnected is connected");
                     String driverId = getDriverId(this);
                     if (driverId != null && driverId.length() > 0) {
-                        subscribeTopic(ENV_PREFIX + "/rd/handshake/" + driverId);
-                        subscribeTopic(ENV_PREFIX + "/drivers/location/req/" + driverId);
+                        subscribeTopic(Constants.MQ_ENV_PREFIX + "/rd/handshake/" + driverId);
+                        subscribeTopic(Constants.MQ_ENV_PREFIX + "/drivers/location/req/" + driverId);
                     }
                 } catch (Exception e) {
                     e.printStackTrace();
@@ -1597,7 +1589,7 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
         }
 
         if (rideReferenceNo.length() > 0) {
-            subscribeTopic(ENV_PREFIX + "/rd/rq/cl/" + rideReferenceNo);
+            subscribeTopic(Constants.MQ_ENV_PREFIX + "/rd/rq/cl/" + rideReferenceNo);
         }
     }
 
@@ -1661,8 +1653,8 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
 
                         if (tpType.equals("4") || tpType.equals("5")) {
                             // This is for portal
-                            publishMessage(ENV_PREFIX + "/" + "rd/rq/ak/ap/" + rideReferenceNo, passpay);
-                            publishMessage(ENV_PREFIX + "/" + "rd/rq/ak/" + rideReferenceNo, passpay);
+                            publishMessage(Constants.MQ_ENV_PREFIX + "/" + "rd/rq/ak/ap/" + rideReferenceNo, passpay);
+                            publishMessage(Constants.MQ_ENV_PREFIX + "/" + "rd/rq/ak/" + rideReferenceNo, passpay);
                             try {
                                 PassRideRequest passRideRequest = new PassRideRequest();
                                 passRideRequest.reference_number = rideReferenceNo;
@@ -1712,7 +1704,7 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
                             }
                         } else {
                             //sending to customer mobile app
-                            publishMessage(ENV_PREFIX + "/" + "rd/rq/ak/" + rideReferenceNo, passpay);
+                            publishMessage(Constants.MQ_ENV_PREFIX + "/" + "rd/rq/ak/" + rideReferenceNo, passpay);
                         }
                     }
 
@@ -1779,23 +1771,23 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
                         mqData.put("topic", topic);
                         mqData.put("payload", payload);
 
-                        if (topic.startsWith(ENV_PREFIX + "/rd/rq/cl/")) {
+                        if (topic.startsWith(Constants.MQ_ENV_PREFIX + "/rd/rq/cl/")) {
                             showNotification(NotificationType.BOOKING_CANCELLED, topic, payload);
-                        } else if (topic.startsWith(ENV_PREFIX + "/rd/rq/")) {
+                        } else if (topic.startsWith(Constants.MQ_ENV_PREFIX + "/rd/rq/")) {
                             showNotification(NotificationType.BOOKING_REQUEST, topic, payload);
                             startBookingStartProcess(payload);
-                        } else if (topic.contains(ENV_PREFIX + "/rd/dr/")) {
+                        } else if (topic.contains(Constants.MQ_ENV_PREFIX + "/rd/dr/")) {
                             // check in payload its a cancelled booking or not
                             showNotification(NotificationType.BOOKING_CANCELLED, topic, payload);
-                        } else if (topic.contains(ENV_PREFIX + "/rd/af/dr/")) {
+                        } else if (topic.contains(Constants.MQ_ENV_PREFIX + "/rd/af/dr/")) {
                             // check in payload its a payment done or not
                             showNotification(NotificationType.PAYMENT_DONE, topic, payload);
-                        } else if (topic.contains(ENV_PREFIX + "/rd/handshake/")) {
+                        } else if (topic.contains(Constants.MQ_ENV_PREFIX + "/rd/handshake/")) {
                             // check in payload its a payment done or not
                             String driverId = getDriverId(this);
                             String[] vals = payload.split("=");
-                            publishMessage(ENV_PREFIX + "/rd/handshake/ack/" + vals[0], driverId + "|");
-                        } else if (topic.startsWith(ENV_PREFIX + "/drivers/location/req/")) {
+                            publishMessage(Constants.MQ_ENV_PREFIX + "/rd/handshake/ack/" + vals[0], driverId + "|");
+                        } else if (topic.startsWith(Constants.MQ_ENV_PREFIX + "/drivers/location/req/")) {
                             // check in payload its a payment done or not
                             isTrackLocRemotly = true;
                             ContextCompat.getMainExecutor(this).execute(()  -> {
@@ -1878,7 +1870,7 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
     void publishMessage(String topicName, String message) {
         String top = topicName.replaceAll("=", "/");
         try {
-            if (top.startsWith(ENV_PREFIX + "/" + "rd/rq/ak/")) {
+            if (top.startsWith(Constants.MQ_ENV_PREFIX + "/" + "rd/rq/ak/")) {
                 String[] parts = message.split("#");
                 String cmd = parts[0].toString().toUpperCase();
                 if (cmd.equals("RQAA")) {
@@ -1886,10 +1878,10 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
                 } else if (cmd.equals("RQAP")) {
                     resetBookingCounterTimer();
                     String dId = getDriverId(this);
-                    subscribeTopic(ENV_PREFIX + "/" + "rd/rq/" + dId);
+                    subscribeTopic(Constants.MQ_ENV_PREFIX + "/" + "rd/rq/" + dId);
                 }
             }
-            else if (top.startsWith(ENV_PREFIX + "/" + "rd/cr/")) {
+            else if (top.startsWith(Constants.MQ_ENV_PREFIX + "/" + "rd/cr/")) {
                 String[] parts = message.split("#");
                 String cmd = parts[0].toString().toUpperCase();
                 if (cmd.equals("RDCT")) {
@@ -1993,8 +1985,8 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
                     setDriverId(driverId);
                     setApiTokenValue(apiToken);
                     if (driverId != null && driverId.length() > 0) {
-                        subscribeTopic(ENV_PREFIX + "/rd/handshake/" + driverId);
-                        subscribeTopic(ENV_PREFIX + "/drivers/location/req/" + driverId);
+                        subscribeTopic(Constants.MQ_ENV_PREFIX + "/rd/handshake/" + driverId);
+                        subscribeTopic(Constants.MQ_ENV_PREFIX + "/drivers/location/req/" + driverId);
                     }
                     ApiEndpoints apiEndpoints = RetrofitClientInstance.getRetrofitInstance(apiToken).create(ApiEndpoints.class);
                     updateDriverMQStatus();

@@ -11,9 +11,6 @@ import retrofit2.converter.gson.GsonConverterFactory;
 
 public class RetrofitClientInstance {
     private static Retrofit retrofit;
-    private static final String BASE_URL = "http://52.66.129.203:3023";
-//    private static final String BASE_URL = "http://192.168.0.103:3023";
-//    private static final String BASE_URL = "https://prpi.boom123.in";
 
     public static Retrofit getRetrofitInstance(String token) {
         if (retrofit == null && token != null && token.trim().length() > 10) {
@@ -35,7 +32,7 @@ public class RetrofitClientInstance {
 
             // Set the custom client when building adapter
             retrofit = new Retrofit.Builder()
-                    .baseUrl(BASE_URL)
+                    .baseUrl(Constants.BASE_URL)
                     .addConverterFactory(GsonConverterFactory.create())
                     .client(client)
                     .build();
