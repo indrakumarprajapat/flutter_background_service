@@ -28,6 +28,7 @@ import android.os.PowerManager;
 import android.os.PowerManager.WakeLock;
 import android.provider.Settings;
 import android.util.Log;
+import android.widget.RemoteViews;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.RequiresApi;
@@ -2210,17 +2211,22 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
 
             if (notificationType == NotificationType.BOOKING_REQUEST) {
 
+                 RemoteViews mRemoteViews = new RemoteViews(getPackageName(), R.layout.notification_layout);;
 
                 NotificationCompat.Builder builder = new NotificationCompat.Builder(this, "FOREGROUND_DEFAULT_BOOKING")
                         .setSmallIcon(R.mipmap.ic_launcher)
-                        .setContentTitle("New Booking Request")
-                        .setStyle(new NotificationCompat.BigTextStyle().bigText(payload))
+//                        .setContentTitle("Booking Request")
+//                        .setContentText("You have new booking Request")
+//                        .setSubText("Open App")
+                        .setCustomHeadsUpContentView(mRemoteViews)
+//                        .setStyle(new NotificationCompat.BigTextStyle().bigText(payload))
                         .setPriority(NotificationCompat.PRIORITY_HIGH)
                         .setTimeoutAfter(30000)
                         .setAutoCancel(true)
                         .setDefaults(NotificationCompat.DEFAULT_ALL)
+
                         .setLargeIcon(BitmapFactory.decodeResource(this.getResources(), R.mipmap.ic_launcher))
-                        .addAction(R.drawable.ic_accept, getString(R.string.openapp), pi)
+//                        .addAction(R.drawable.ic_accept, getString(R.string.openapp), pi)
                         .setFullScreenIntent(pi, true);
 //                      .addAction(R.drawable.ic_pass, getString(R.string.pass), pi);
 //                      .setFullScreenIntent(pi, true);
