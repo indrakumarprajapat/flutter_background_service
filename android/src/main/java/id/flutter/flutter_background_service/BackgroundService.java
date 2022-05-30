@@ -1413,7 +1413,7 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
                     String driverId = getDriverId(this);
                     if (driverId != null && driverId.length() > 0) {
                         subscribeTopic(Constants.MQ_ENV_PREFIX + "/rd/handshake/" + driverId);
-                        subscribeTopic(Constants.MQ_ENV_PREFIX + "/drivers/location/req/" + driverId);
+//                        subscribeTopic(Constants.MQ_ENV_PREFIX + "/drivers/location/req/" + driverId);
                     }
                 } catch (Exception e) {
                     e.printStackTrace();
@@ -1987,7 +1987,7 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
                     setApiTokenValue(apiToken);
                     if (driverId != null && driverId.length() > 0) {
                         subscribeTopic(Constants.MQ_ENV_PREFIX + "/rd/handshake/" + driverId);
-                        subscribeTopic(Constants.MQ_ENV_PREFIX + "/drivers/location/req/" + driverId);
+//                        subscribeTopic(Constants.MQ_ENV_PREFIX + "/drivers/location/req/" + driverId);
                     }
                     ApiEndpoints apiEndpoints = RetrofitClientInstance.getRetrofitInstance(apiToken).create(ApiEndpoints.class);
                     updateDriverMQStatus();
