@@ -668,24 +668,24 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
                             if (isDebug)
                                 Log.d(">>> ApiCall-Success >", response.toString());
 
-                            try {
-                                //App Event Log
-                                String className = new Throwable()
-                                        .getStackTrace()[0]
-                                        .getClassName();
-                                String methodName = new Throwable()
-                                        .getStackTrace()[0]
-                                        .getMethodName();
-                                int lineNumber = new Throwable()
-                                        .getStackTrace()[0]
-                                        .getLineNumber();
-                                String title = "TESTING-MQ";
-                                String data = "TESTING-MQ = " + isMqAlive;
-                                addAppEventLog(LogType.ERROR, LogTag.REST_API_CALL, title, data,
-                                        className, methodName, lineNumber);
-                            } catch (Exception e) {
-                                e.printStackTrace();
-                            }
+//                            try {
+//                                //App Event Log
+//                                String className = new Throwable()
+//                                        .getStackTrace()[0]
+//                                        .getClassName();
+//                                String methodName = new Throwable()
+//                                        .getStackTrace()[0]
+//                                        .getMethodName();
+//                                int lineNumber = new Throwable()
+//                                        .getStackTrace()[0]
+//                                        .getLineNumber();
+//                                String title = "TESTING-MQ";
+//                                String data = "TESTING-MQ = " + isMqAlive;
+//                                addAppEventLog(LogType.ERROR, LogTag.REST_API_CALL, title, data,
+//                                        className, methodName, lineNumber);
+//                            } catch (Exception e) {
+//                                e.printStackTrace();
+//                            }
                         }
 
                         @Override
@@ -1146,20 +1146,20 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
             e.printStackTrace();
         }
 
-        //App Event Log
-        String className = new Throwable()
-                .getStackTrace()[0]
-                .getClassName();
-        String methodName = new Throwable()
-                .getStackTrace()[0]
-                .getMethodName();
-        int lineNumber = new Throwable()
-                .getStackTrace()[0]
-                .getLineNumber();
-        String title = "On Start Command";
-        String data = "On Start Command";
-        addAppEventLog(LogType.DEBUG, LogTag.SERVICE_STARTED, title, data,
-                className, methodName, lineNumber);
+//        //App Event Log
+//        String className = new Throwable()
+//                .getStackTrace()[0]
+//                .getClassName();
+//        String methodName = new Throwable()
+//                .getStackTrace()[0]
+//                .getMethodName();
+//        int lineNumber = new Throwable()
+//                .getStackTrace()[0]
+//                .getLineNumber();
+//        String title = "On Start Command";
+//        String data = "On Start Command";
+//        addAppEventLog(LogType.DEBUG, LogTag.SERVICE_STARTED, title, data,
+//                className, methodName, lineNumber);
 
         return START_STICKY;
     }
@@ -1208,20 +1208,20 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
                 Log.d(">>> BGS runService ", "runService is called");
             }
             if (isRunning.get() || (backgroundEngine != null && !backgroundEngine.getDartExecutor().isExecutingDart())) {
-                //App Event Log
-                String className = new Throwable()
-                        .getStackTrace()[0]
-                        .getClassName();
-                String methodName = new Throwable()
-                        .getStackTrace()[0]
-                        .getMethodName();
-                int lineNumber = new Throwable()
-                        .getStackTrace()[0]
-                        .getLineNumber();
-                String title = "Is Running is True";
-                String data = "Is running is true or backgroundEngin is not null and isExecutingDart is false ";
-                addAppEventLog(LogType.DEBUG, LogTag.SERVICE_RUNNING, title, data,
-                        className, methodName, lineNumber);
+//                //App Event Log
+//                String className = new Throwable()
+//                        .getStackTrace()[0]
+//                        .getClassName();
+//                String methodName = new Throwable()
+//                        .getStackTrace()[0]
+//                        .getMethodName();
+//                int lineNumber = new Throwable()
+//                        .getStackTrace()[0]
+//                        .getLineNumber();
+//                String title = "Is Running is True";
+//                String data = "Is running is true or backgroundEngin is not null and isExecutingDart is false ";
+//                addAppEventLog(LogType.DEBUG, LogTag.SERVICE_RUNNING, title, data,
+//                        className, methodName, lineNumber);
                 return;
             }
 
@@ -1265,20 +1265,20 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
 
             updateNotificationInfo();
 
-            //App Event Log
-            String className = new Throwable()
-                    .getStackTrace()[0]
-                    .getClassName();
-            String methodName = new Throwable()
-                    .getStackTrace()[0]
-                    .getMethodName();
-            int lineNumber = new Throwable()
-                    .getStackTrace()[0]
-                    .getLineNumber();
-            String title = "Bg Service runing";
-            String data = "Update Notification info called";
-            addAppEventLog(LogType.DEBUG, LogTag.SERVICE_RUNNING, title, data,
-                    className, methodName, lineNumber);
+//            //App Event Log
+//            String className = new Throwable()
+//                    .getStackTrace()[0]
+//                    .getClassName();
+//            String methodName = new Throwable()
+//                    .getStackTrace()[0]
+//                    .getMethodName();
+//            int lineNumber = new Throwable()
+//                    .getStackTrace()[0]
+//                    .getLineNumber();
+//            String title = "Bg Service runing";
+//            String data = "Update Notification info called";
+//            addAppEventLog(LogType.DEBUG, LogTag.SERVICE_RUNNING, title, data,
+//                    className, methodName, lineNumber);
 
         } catch (UnsatisfiedLinkError e) {
             notificationContent = "Error " + e.getMessage();
@@ -1486,20 +1486,20 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
                 Log.d(">>> BGS connectMqtt", "hive_client.toAsync().connectWith()");
             }
 
-            //App Event Log
-            String className = new Throwable()
-                    .getStackTrace()[0]
-                    .getClassName();
-            String methodName = new Throwable()
-                    .getStackTrace()[0]
-                    .getMethodName();
-            int lineNumber = new Throwable()
-                    .getStackTrace()[0]
-                    .getLineNumber();
-            String title = "MQ connect trying";
-            String data = "mq connection trying";
-            addAppEventLog(LogType.DEBUG, LogTag.MQ_CONNECT_TRY, title, data,
-                    className, methodName, lineNumber);
+//            //App Event Log
+//            String className = new Throwable()
+//                    .getStackTrace()[0]
+//                    .getClassName();
+//            String methodName = new Throwable()
+//                    .getStackTrace()[0]
+//                    .getMethodName();
+//            int lineNumber = new Throwable()
+//                    .getStackTrace()[0]
+//                    .getLineNumber();
+//            String title = "MQ connect trying";
+//            String data = "mq connection trying";
+//            addAppEventLog(LogType.DEBUG, LogTag.MQ_CONNECT_TRY, title, data,
+//                    className, methodName, lineNumber);
         }
     }
 
