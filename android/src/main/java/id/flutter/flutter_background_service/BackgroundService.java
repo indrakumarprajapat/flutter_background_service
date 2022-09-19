@@ -1407,12 +1407,19 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
         try {
             JSONObject mqData = new JSONObject();
             mqData.put("responseData", "connected");
+
+            subscribeTopic(Constants.MQ_ENV_PREFIX + "/notifydriver");
+
+            Log.d(">>> notify_me", "notifydriver");
+
             if (methodChannel != null) {
                 try {
                     localBroadcastManager(mqData, ">>> BGS onMqttConnected", "sent onMqttConnected is connected");
                     String driverId = getDriverId(this);
                     if (driverId != null && driverId.length() > 0) {
+
                         subscribeTopic(Constants.MQ_ENV_PREFIX + "/rd/handshake/" + driverId);
+
 //                        subscribeTopic(Constants.MQ_ENV_PREFIX + "/drivers/location/req/" + driverId);
                     }
                 } catch (Exception e) {
@@ -1774,7 +1781,7 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
 
                         if (topic.startsWith(Constants.MQ_ENV_PREFIX + "/rd/rq/cl/")) {
                             showNotification(NotificationType.BOOKING_CANCELLED, topic, payload);
-                        } else if (topic.startsWith(Constants.MQ_ENV_PREFIX + "/rd/rq/")) {
+                        } else if (topic.contains(Constants.MQ_ENV_PREFIX + "/rd/rq/")) {
                             showNotification(NotificationType.BOOKING_REQUEST, topic, payload);
                             startBookingStartProcess(payload);
                         } else if (topic.contains(Constants.MQ_ENV_PREFIX + "/rd/dr/")) {
@@ -1794,6 +1801,10 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
                             ContextCompat.getMainExecutor(this).execute(()  -> {
                                 startTracking();
                             });
+                        } else if (topic.startsWith(Constants.MQ_ENV_PREFIX + "/notifydriver")) {
+                            JSONObject mqData_ = new JSONObject();
+                            mqData_.put("responseData", "on_screen_notification");
+                            localBroadcastManager(mqData_, ">>> In-App_Notification > ", "in_app_Notification");
                         }
 
                         if (methodChannel != null) {

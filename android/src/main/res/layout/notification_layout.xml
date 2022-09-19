@@ -19,6 +19,7 @@
         android:textSize="17sp"
         android:textStyle="bold" />
 
+
     <TextView
         android:id="@+id/notif_content"
         android:layout_width="wrap_content"
@@ -33,15 +34,16 @@
         android:textSize="13sp" />
 
     <TextView
+        android:id="@+id/btn_open"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_below="@+id/notif_content"
-        android:layout_margin="10dp"
         android:paddingBottom="9dp"
         android:text="Open App"
         android:textColor="#26A895"
         android:textSize="15sp"
         android:textStyle="bold" />
+
 
     <ImageView
         android:id="@+id/notif_icon"
