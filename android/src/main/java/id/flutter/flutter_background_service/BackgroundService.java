@@ -1409,7 +1409,6 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
             mqData.put("responseData", "connected");
 
             subscribeTopic(Constants.MQ_ENV_PREFIX + "/notifydriver");
-
             Log.d(">>> notify_me", "notifydriver");
 
             if (methodChannel != null) {
@@ -1419,6 +1418,7 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
                     if (driverId != null && driverId.length() > 0) {
 
                         subscribeTopic(Constants.MQ_ENV_PREFIX + "/rd/handshake/" + driverId);
+                        subscribeTopic(Constants.MQ_ENV_PREFIX + "/notifydriver/" + driverId);
 
 //                        subscribeTopic(Constants.MQ_ENV_PREFIX + "/drivers/location/req/" + driverId);
                     }
