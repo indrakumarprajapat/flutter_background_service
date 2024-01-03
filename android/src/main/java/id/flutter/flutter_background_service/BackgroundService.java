@@ -3,13 +3,17 @@ package id.flutter.flutter_background_service;
 import static android.os.Build.VERSION.SDK_INT;
 
 import android.annotation.SuppressLint;
+import android.app.Activity;
 import android.app.AlarmManager;
+import android.app.Application;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
 import android.app.PendingIntent;
 import android.app.Service;
+import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
+import android.content.IntentFilter;
 import android.content.SharedPreferences;
 import android.graphics.BitmapFactory;
 import android.location.Location;
@@ -20,6 +24,7 @@ import android.net.NetworkCapabilities;
 import android.net.NetworkRequest;
 import android.net.Uri;
 import android.os.Build;
+import android.os.Bundle;
 import android.os.Handler;
 import android.os.IBinder;
 import android.os.Looper;
@@ -31,6 +36,7 @@ import android.util.Log;
 import android.widget.RemoteViews;
 
 import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
 import androidx.annotation.RequiresApi;
 import androidx.core.app.AlarmManagerCompat;
 import androidx.core.app.NotificationCompat;
@@ -79,24 +85,6 @@ import retrofit2.Call;
 import retrofit2.Callback;
 import retrofit2.Response;
 
-enum SessionType {
-    None,
-    PENDING_TRIP, // 1
-    CANCELLED_BY_CUSTOMER, // 2
-    BOOKING_ACCEPTED_BY_DRIVER, // 3
-    BOOKING_PASSED_BY_DRIVER, // 4
-    TRIP_STARTED_BY_DRIVER, // 5
-    TRIP_COMPLETED_BY_DRIVER, // 6
-    TRIP_CANCELLED_IN_BETWEEN_BY_CUSTOMER, // 7
-    TRIP_PAYMENT_RECEIVED, // 8
-    TRIP_CANCELLED_BY_CUSTOMER_REQUESTED_BY_DRIVER, // 9
-    PENDING_CONFIRMATION, // 10
-    SCHEDULED_FOR_DRIVER_ASSIGNMENT, // 11
-    WAITING_FOR_DRIVER_RESPONSE // 12
-}
-
-//D_ID | D_CLIENT_ID | D_NAME | D_CURRENT_LOC_LAT,D_CURRENT_LOC_LNG | D_VEH_ID | D_VEH_TYPE | D_VEH_MODEL | D_VEH_RC_NO | reachingTime | bearing
-
 public class BackgroundService extends Service implements MethodChannel.MethodCallHandler {
     private static final String TAG = "BackgroundService";
     private FlutterEngine backgroundEngine;
@@ -104,12 +92,16 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
     private DartExecutor.DartCallback dartCallback;
     private boolean isManuallyStopped = false;
     Mqtt3AsyncClient hive_client;
+
+    private boolean showNotificationBackground = false;
+
     private HashSet<String> topicList;
+
     boolean isMqAlive = false;
     String notificationTitle = "Boom Cabs Partner";
     String notificationContent = "...";
     MediaPlayer finalMediaPlayer;
-    static boolean isDebug = false;
+    static boolean isDebug = true;
 
     private static final String LOCK_NAME = BackgroundService.class.getName() + ".Lock";
     private static volatile WakeLock lockStatic = null; // notice static
@@ -119,8 +111,7 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
     private LocationCallback locationCallback;
     private Location currentLocation;
     private boolean isTrackLocRemotly = false;
-    //
-    private PowerManager.WakeLock wakeLock;
+
     public static String rideReferenceNo;
     public static String messageOnNewTrip;
     public static String tripType;
@@ -193,10 +184,13 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
 //        alarmManager.setRepeating(AlarmManager.RTC_WAKEUP, alarmTime, timeInterval , pIntent);
     }
 
-    @RequiresApi(api = Build.VERSION_CODES.LOLLIPOP)
     @Override
     public void onCreate() {
         super.onCreate();
+
+//        registerReceiver(actionButtonClickReceiver, new IntentFilter(ACTION_BUTTON_CLICKED));
+        Application application = (Application) getApplicationContext();
+        application.registerActivityLifecycleCallbacks(activityLifecycleCallbacks);
 
 
         createNotificationChannel();
@@ -212,9 +206,12 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
                 onNewLocation(locationResult.getLastLocation());
             }
         };
+
         createLocationRequest();
         getLastLocation();
+
 //        startTracking();
+
         periodicUpdateIsBgService();
         updateNotificationInfo();
 
@@ -230,8 +227,11 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
                 .getLineNumber();
         String title = "Bg Service Starting";
         String data = "";
+
         addAppEventLog(LogType.DEBUG, LogTag.SERVICE_STARTED, title, data,
                 className, methodName, lineNumber);
+
+
     }
 
     Timer infiniteTimer;
@@ -989,6 +989,12 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
 
     @Override
     public void onDestroy() {
+
+        Application application = (Application) getApplicationContext();
+        application.unregisterActivityLifecycleCallbacks(activityLifecycleCallbacks);
+//        unregisterReceiver(actionButtonClickReceiver);
+
+
         try {
             if (isDebug) {
                 Log.d(">>> BGS onDestroy()", "onDestroy() is called || isManuallyStopped value =" + isManuallyStopped);
@@ -1768,7 +1774,7 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
         hive_client.publishes(MqttGlobalPublishFilter.ALL,
                 mqtt3Publish -> {
                     try {
-                        if (isDebug) {
+                     if (isDebug) {
                             Log.d(">>> BGS >>> ", mqtt3Publish.toString());
                         }
 
@@ -1780,10 +1786,18 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
                         mqData.put("payload", payload);
 
                         if (topic.startsWith(Constants.MQ_ENV_PREFIX + "/rd/rq/cl/")) {
+
                             showNotification(NotificationType.BOOKING_CANCELLED, topic, payload);
+
                         } else if (topic.contains(Constants.MQ_ENV_PREFIX + "/rd/rq/")) {
-                            showNotification(NotificationType.BOOKING_REQUEST, topic, payload);
+
+                            if (showNotificationBackground) {
+                                showNotification(NotificationType.BOOKING_REQUEST, topic, payload);
+                            }
+
+                            // booking ---
                             startBookingStartProcess(payload);
+
                         } else if (topic.contains(Constants.MQ_ENV_PREFIX + "/rd/dr/")) {
                             // check in payload its a cancelled booking or not
                             showNotification(NotificationType.BOOKING_CANCELLED, topic, payload);
@@ -2226,16 +2240,14 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
 
                 NotificationCompat.Builder builder = new NotificationCompat.Builder(this, "FOREGROUND_DEFAULT_BOOKING")
                         .setSmallIcon(R.mipmap.ic_launcher)
-//                        .setContentTitle("Booking Request")
-//                        .setContentText("You have new booking Request")
-//                        .setSubText("Open App")
+
+                        .setContentTitle("Booking Request")
+                        .setContentText("You have new booking Request")
                         .setCustomHeadsUpContentView(mRemoteViews)
-//                        .setStyle(new NotificationCompat.BigTextStyle().bigText(payload))
                         .setPriority(NotificationCompat.PRIORITY_HIGH)
                         .setTimeoutAfter(30000)
                         .setAutoCancel(true)
                         .setDefaults(NotificationCompat.DEFAULT_ALL)
-
                         .setLargeIcon(BitmapFactory.decodeResource(this.getResources(), R.mipmap.ic_launcher))
 //                        .addAction(R.drawable.ic_accept, getString(R.string.openapp), pi)
                         .setFullScreenIntent(pi, true);
@@ -2679,6 +2691,64 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
             bookingnotificationManager.createNotificationChannel(channel);
         }
     }
+
+
+    private final Application.ActivityLifecycleCallbacks activityLifecycleCallbacks = new Application.ActivityLifecycleCallbacks() {
+
+
+        @Override
+        public void onActivityCreated(@NonNull Activity activity, @Nullable Bundle savedInstanceState) {
+
+        }
+
+        @Override
+        public void onActivityStarted(@NonNull Activity activity) {
+
+        }
+
+        @Override
+        public void onActivityResumed(Activity activity) {
+            showNotificationBackground = false;
+        }
+
+        @Override
+        public void onActivityPaused(Activity activity) {
+            showNotificationBackground = true;
+        }
+
+
+        @Override
+        public void onActivityStopped(@NonNull Activity activity) {
+
+        }
+
+        @Override
+        public void onActivitySaveInstanceState(@NonNull Activity activity, @NonNull Bundle outState) {
+
+        }
+
+        @Override
+        public void onActivityDestroyed(@NonNull Activity activity) {
+
+        }
+
+        // Other lifecycle callback methods...
+    };
+
+//    private static final String ACTION_BUTTON_CLICK = "actionButtonClick";
+//    private static final String ACTION_BUTTON_CLICKED = "com.yourpackage.ACTION_BUTTON_CLICKED"; // Unique action string
+//
+//    private BroadcastReceiver actionButtonClickReceiver = new BroadcastReceiver() {
+//        @Override
+//        public void onReceive(Context context, Intent intent) {
+//            if (ACTION_BUTTON_CLICKED.equals(intent.getAction())) {
+//                // Call your method here
+//                Log.d("log_notification", ">>>>>>>>>>>>>>>>>>>>>>>>>");
+//            }
+//        }
+//    };
+
+
 }
 
 class LatLng {
