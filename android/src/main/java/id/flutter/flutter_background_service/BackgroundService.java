@@ -119,6 +119,7 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
     public static String customerId = "0";
     NotificationManager bookingnotificationManager;
 
+    Timer connectTimer = null;
 
     {
         topicList = new HashSet<>();
@@ -744,10 +745,11 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
     }
 
     public void stopBackgroundService() {
-        if (infiniteTimer != null) {
-            infiniteTimer.cancel();
-            infiniteTimer = null;
-        }
+//        if (infiniteTimer != null) {
+//            infiniteTimer.cancel();
+//            infiniteTimer = null;
+//        }
+
         try {
             Intent intent = new Intent(this, WatchdogReceiver.class);
             PendingIntent pi;
@@ -1316,7 +1318,6 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
         }
     }
 
-    Timer connectTimer = null;
 
     private void initializeConnection() {
         if (hive_client == null) {
@@ -1593,8 +1594,8 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
                                 className, methodName, lineNumber);
                     }
                     if (timerCurrentTick <= 0 && !isBookingTimerCancelled) {
-                        bookingCounterTimer.cancel();
-                        bookingCounterTimer = null;
+                        cancelBookingTimer();
+
                         // call auto pass
                         autoPassTheBooking();
                     }
@@ -1775,8 +1776,8 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
                 mqtt3Publish -> {
                     try {
                      if (isDebug) {
-                            Log.d(">>> BGS >>> ", mqtt3Publish.toString());
-                        }
+                         Log.d(">>> BGS >>> ", mqtt3Publish.toString());
+                     }
 
                         String topic = mqtt3Publish.getTopic().toString();
                         String payload = new String(mqtt3Publish.getPayloadAsBytes());
@@ -1784,6 +1785,10 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
                         mqData.put("responseData", "mqttResponse");
                         mqData.put("topic", topic);
                         mqData.put("payload", payload);
+
+
+                        Log.d("in coming_topic", topic);
+
 
                         if (topic.startsWith(Constants.MQ_ENV_PREFIX + "/rd/rq/cl/")) {
 
@@ -1878,6 +1883,8 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
         String top = topicName.replaceAll("=", "/");
         removeTopic(top);
         hive_client.unsubscribeWith().topicFilter(top).send();
+        Log.d("unSubscribeTopic>>>>", top);
+
     }
 
     void subscribeTopic(String topicName) {
@@ -1891,6 +1898,8 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
 
         addTopic(top);
         hive_client.subscribeWith().topicFilter(top).qos(MqttQos.EXACTLY_ONCE).send();
+
+        Log.d("subscribeTopic_>>>>", top);
     }
 
     void publishMessage(String topicName, String message) {
@@ -1941,6 +1950,9 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
             addAppEventLog(LogType.DEBUG, LogTag.LOCATION_FETCH, title, data,
                     className, methodName, lineNumber);
         }
+
+        Log.d("publish topic >>>>>>>> ", top);
+
         hive_client.toAsync().publishWith()
                 .topic(top)
                 .payload(message.getBytes())
@@ -1950,8 +1962,7 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
 
     void resetBookingCounterTimer() {
         stopBookingSound();
-        bookingCounterTimer.cancel();
-        bookingCounterTimer = null;
+        cancelBookingTimer();
         isBookingTimerCancelled = true;
     }
 
@@ -2360,8 +2371,8 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
 
                 try {
                     stopBookingSound();
-                    bookingCounterTimer.cancel();
-                    bookingCounterTimer = null;
+                    cancelBookingTimer();
+
                     isBookingTimerCancelled = true;
 
                 } catch (Exception e) {
@@ -2396,6 +2407,13 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
                         .addAction(R.drawable.ic_open_app, getString(R.string.openapp), pi);
                 startForeground(99778, builder.build());
             }
+        }
+    }
+
+    private void cancelBookingTimer() {
+        if (bookingCounterTimer != null) {
+            bookingCounterTimer.cancel();
+            bookingCounterTimer = null;
         }
     }
 
