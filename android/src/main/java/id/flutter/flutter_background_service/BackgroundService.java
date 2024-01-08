@@ -991,11 +991,9 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
 
     @Override
     public void onDestroy() {
-
         Application application = (Application) getApplicationContext();
         application.unregisterActivityLifecycleCallbacks(activityLifecycleCallbacks);
 //        unregisterReceiver(actionButtonClickReceiver);
-
 
         try {
             if (isDebug) {
@@ -1603,9 +1601,9 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
             }, 1000, 1000);
         }
 
-        if (rideReferenceNo.length() > 0) {
-            subscribeTopic(Constants.MQ_ENV_PREFIX + "/rd/rq/cl/" + rideReferenceNo);
-        }
+//        if (rideReferenceNo.length() > 0) {
+//            subscribeTopic(Constants.MQ_ENV_PREFIX + "/rd/rq/cl/" + rideReferenceNo);
+//        }
     }
 
     @SuppressLint("NewApi")
@@ -1789,27 +1787,44 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
 
                         Log.d("in coming_topic", topic);
 
+                        String[] parts = payload.split("#");
 
-                        if (topic.startsWith(Constants.MQ_ENV_PREFIX + "/rd/rq/cl/")) {
+                        if (topic.startsWith(Constants.MQ_ENV_PREFIX + "/dr/rd/rr/")) {
+                            // check in payload its a payment done or not
+                            String cmd = parts[0].toString().toUpperCase();
 
-                            showNotification(NotificationType.BOOKING_CANCELLED, topic, payload);
+                            if (cmd.equals("RQAA")) {
+                                //TODO
+                            }else if (cmd.equals("RDST")) {
+                                //TODO
+                            } else if (cmd.equals("RDCT")) {
+                                String driverId = getDriverId(this);
+                                subscribeTopic(Constants.MQ_ENV_PREFIX + "/dr/rd/rq/" + driverId);
+                            }else if (cmd.equals("RDCL")) {
+                                showNotification(NotificationType.BOOKING_CANCELLED, topic, payload);
+                                String driverId = getDriverId(this);
+                                subscribeTopic(Constants.MQ_ENV_PREFIX + "/dr/rd/rq/" + driverId);
+                            } else if (cmd.equals("RPDN")) {
+                                showNotification(NotificationType.PAYMENT_DONE, topic, payload);
+                            }
 
-                        } else if (topic.contains(Constants.MQ_ENV_PREFIX + "/rd/rq/")) {
-
+                        } else if (topic.contains(Constants.MQ_ENV_PREFIX + "/dr/rd/rq/")) {
                             if (showNotificationBackground) {
                                 showNotification(NotificationType.BOOKING_REQUEST, topic, payload);
                             }
+                            String cmd = parts[0].toString().toUpperCase();
+                            if(cmd.equals("RDRQ")){
+                                String[] valuesPart3 = parts[3].split("\\|");
+                                // Trip Type coming from Customer Request
+                                rideReferenceNo = valuesPart3[0];
 
-                            // booking ---
-                            startBookingStartProcess(payload);
+                                subscribeTopic(Constants.MQ_ENV_PREFIX + "/dr/rd/rr/" + rideReferenceNo);
 
-                        } else if (topic.contains(Constants.MQ_ENV_PREFIX + "/rd/dr/")) {
-                            // check in payload its a cancelled booking or not
-                            showNotification(NotificationType.BOOKING_CANCELLED, topic, payload);
-                        } else if (topic.contains(Constants.MQ_ENV_PREFIX + "/rd/af/dr/")) {
-                            // check in payload its a payment done or not
-                            showNotification(NotificationType.PAYMENT_DONE, topic, payload);
-                        } else if (topic.contains(Constants.MQ_ENV_PREFIX + "/rd/handshake/")) {
+                                // booking ---
+                                startBookingStartProcess(payload);
+                            }
+
+                        }    else if (topic.contains(Constants.MQ_ENV_PREFIX + "/rd/handshake/")) {
                             // check in payload its a payment done or not
                             String driverId = getDriverId(this);
                             String[] vals = payload.split("=");
@@ -1905,18 +1920,7 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
     void publishMessage(String topicName, String message) {
         String top = topicName.replaceAll("=", "/");
         try {
-            if (top.startsWith(Constants.MQ_ENV_PREFIX + "/" + "rd/rq/ak/")) {
-                String[] parts = message.split("#");
-                String cmd = parts[0].toString().toUpperCase();
-                if (cmd.equals("RQAA")) {
-                    resetBookingCounterTimer();
-                } else if (cmd.equals("RQAP")) {
-                    resetBookingCounterTimer();
-                    String dId = getDriverId(this);
-                    subscribeTopic(Constants.MQ_ENV_PREFIX + "/" + "rd/rq/" + dId);
-                }
-            }
-            else if (top.startsWith(Constants.MQ_ENV_PREFIX + "/" + "rd/cr/")) {
+             if (top.startsWith(Constants.MQ_ENV_PREFIX + "/" + "cr/rd/rr")) {
                 String[] parts = message.split("#");
                 String cmd = parts[0].toString().toUpperCase();
                 if (cmd.equals("RDCT")) {
@@ -1925,7 +1929,13 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
                     setLatLngList(this, emptyListStr);
                 }else if(cmd.equals("RDST")){
                     startTracking();
-                }
+                }else if (cmd.equals("RQAA")) {
+                     resetBookingCounterTimer();
+                 } else if (cmd.equals("RQAP")) {
+                     resetBookingCounterTimer();
+//                     String dId = getDriverId(this);
+//                     subscribeTopic(Constants.MQ_ENV_PREFIX + "/" + "rd/rq/" + dId);
+                 }
             }
         } catch (Exception e) {
             e.printStackTrace();
