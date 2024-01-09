@@ -1923,7 +1923,7 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
         String top = topicName.replaceAll("=", "/");
         try {
              if (top.startsWith(Constants.MQ_ENV_PREFIX + "/" + "cr/rd/rr")) {
-                String[] parts = message.split("#");
+                String[] parts = message.split("|");
                 String cmd = parts[0].toString().toUpperCase();
                 if (cmd.equals("RDCT")) {
                     stopTracking();
