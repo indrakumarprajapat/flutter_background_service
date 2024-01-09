@@ -1784,14 +1784,30 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
                         mqData.put("topic", topic);
                         mqData.put("payload", payload);
 
-
                         Log.d("in coming_topic", topic);
 
-                        String[] parts = payload.split("#");
+                        if (topic.contains(Constants.MQ_ENV_PREFIX + "/dr/rd/rq/")) {
+                            String[] rideDetails = payload.split("|");
 
-                        if (topic.startsWith(Constants.MQ_ENV_PREFIX + "/dr/rd/rr/")) {
+                            if (showNotificationBackground) {
+                                showNotification(NotificationType.BOOKING_REQUEST, topic, payload);
+                            }
+                            String cmd = rideDetails[0].toString().toUpperCase();
+                            if(cmd.equals("RDRQ")){
+                                rideReferenceNo = rideDetails[2];
+
+                                subscribeTopic(Constants.MQ_ENV_PREFIX + "/dr/rd/rr/" + rideReferenceNo);
+
+                                // booking ---
+                                startBookingStartProcess(payload);
+                            }
+
+                        }
+                            else if (topic.startsWith(Constants.MQ_ENV_PREFIX + "/dr/rd/rr/")) {
+                            String[] rideDetails = payload.split("|");
+
                             // check in payload its a payment done or not
-                            String cmd = parts[0].toString().toUpperCase();
+                            String cmd = rideDetails[0].toString().toUpperCase();
 
                             if (cmd.equals("RQAA")) {
                                 //TODO
@@ -1808,34 +1824,20 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
                                 showNotification(NotificationType.PAYMENT_DONE, topic, payload);
                             }
 
-                        } else if (topic.contains(Constants.MQ_ENV_PREFIX + "/dr/rd/rq/")) {
-                            if (showNotificationBackground) {
-                                showNotification(NotificationType.BOOKING_REQUEST, topic, payload);
-                            }
-                            String cmd = parts[0].toString().toUpperCase();
-                            if(cmd.equals("RDRQ")){
-                                String[] valuesPart3 = parts[3].split("\\|");
-                                // Trip Type coming from Customer Request
-                                rideReferenceNo = valuesPart3[0];
-
-                                subscribeTopic(Constants.MQ_ENV_PREFIX + "/dr/rd/rr/" + rideReferenceNo);
-
-                                // booking ---
-                                startBookingStartProcess(payload);
-                            }
-
-                        }    else if (topic.contains(Constants.MQ_ENV_PREFIX + "/rd/handshake/")) {
+                        } else if (topic.contains(Constants.MQ_ENV_PREFIX + "/rd/handshake/")) {
                             // check in payload its a payment done or not
                             String driverId = getDriverId(this);
                             String[] vals = payload.split("=");
                             publishMessage(Constants.MQ_ENV_PREFIX + "/rd/handshake/ack/" + vals[0], driverId + "|");
-                        } else if (topic.startsWith(Constants.MQ_ENV_PREFIX + "/drivers/location/req/")) {
+                        }
+                        else if (topic.startsWith(Constants.MQ_ENV_PREFIX + "/drivers/location/req/")) {
                             // check in payload its a payment done or not
                             isTrackLocRemotly = true;
                             ContextCompat.getMainExecutor(this).execute(()  -> {
                                 startTracking();
                             });
-                        } else if (topic.startsWith(Constants.MQ_ENV_PREFIX + "/notifydriver")) {
+                        }
+                        else if (topic.startsWith(Constants.MQ_ENV_PREFIX + "/notifydriver")) {
                             JSONObject mqData_ = new JSONObject();
                             mqData_.put("responseData", "on_screen_notification");
                             localBroadcastManager(mqData_, ">>> In-App_Notification > ", "in_app_Notification");
