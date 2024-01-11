@@ -210,29 +210,9 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
 
         createLocationRequest();
         getLastLocation();
-
 //        startTracking();
-
         periodicUpdateIsBgService();
         updateNotificationInfo();
-
-        //App Event Log
-        String className = new Throwable()
-                .getStackTrace()[0]
-                .getClassName();
-        String methodName = new Throwable()
-                .getStackTrace()[0]
-                .getMethodName();
-        int lineNumber = new Throwable()
-                .getStackTrace()[0]
-                .getLineNumber();
-        String title = "Bg Service Starting";
-        String data = "";
-
-        addAppEventLog(LogType.DEBUG, LogTag.SERVICE_STARTED, title, data,
-                className, methodName, lineNumber);
-
-
     }
 
     Timer infiniteTimer;
@@ -275,27 +255,7 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
             if (isDebug) {
                 Log.d(TAG, "Lost location permission.$unlikely");
             }
-            //App Event Log
-            String className = new Throwable()
-                    .getStackTrace()[0]
-                    .getClassName();
-            String methodName = new Throwable()
-                    .getStackTrace()[0]
-                    .getMethodName();
-            int lineNumber = new Throwable()
-                    .getStackTrace()[0]
-                    .getLineNumber();
-            String title = e.getLocalizedMessage();
-            String data = e.getMessage();
-            try {
-                data = e.getMessage() + " # " + e.getCause().getMessage() + " # " +
-                        e.getStackTrace().toString();
-            } catch (Exception er) {
-                er.printStackTrace();
-            }
-            addAppEventLog(LogType.EXCEPTION, LogTag.LOCATION_FETCH, title, data,
-                    className, methodName, lineNumber);
-        }
+         }
     }
 
     ObjectMapper objectMapper = new ObjectMapper();
@@ -334,26 +294,7 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
         } catch (JSONException e) {
             e.printStackTrace();
 
-            //App Event Log
-            String className = new Throwable()
-                    .getStackTrace()[0]
-                    .getClassName();
-            String methodName = new Throwable()
-                    .getStackTrace()[0]
-                    .getMethodName();
-            int lineNumber = new Throwable()
-                    .getStackTrace()[0]
-                    .getLineNumber();
-            String title = e.getLocalizedMessage();
-            String data = e.getMessage();
-            try {
-                data = e.getMessage() + " # " + e.getCause().getMessage() + " # " +
-                        e.getStackTrace().toString();
-            } catch (Exception er) {
-                er.printStackTrace();
-            }
-            addAppEventLog(LogType.EXCEPTION, LogTag.LOCATION_FETCH, title, data,
-                    className, methodName, lineNumber);
+
         }
         String appState = getAppStateValue(this);
 
@@ -377,26 +318,7 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
             }
         } catch (Exception e) {
             e.printStackTrace();
-            //App Event Log
-            String className = new Throwable()
-                    .getStackTrace()[0]
-                    .getClassName();
-            String methodName = new Throwable()
-                    .getStackTrace()[0]
-                    .getMethodName();
-            int lineNumber = new Throwable()
-                    .getStackTrace()[0]
-                    .getLineNumber();
-            String title = e.getLocalizedMessage();
-            String data = e.getMessage();
-            try {
-                data = e.getMessage() + " # " + e.getCause().getMessage() + " # " +
-                        e.getStackTrace().toString();
-            } catch (Exception er) {
-                er.printStackTrace();
-            }
-            addAppEventLog(LogType.DEBUG, LogTag.LOCATION_FETCH, title, data,
-                    className, methodName, lineNumber);
+
         }
         if (methodChannel != null) {
             try {
@@ -419,26 +341,7 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
                     } catch (Exception e) {
                         latLngList = new ArrayList<>();
                         e.printStackTrace();
-                        //App Event Log
-                        String className = new Throwable()
-                                .getStackTrace()[0]
-                                .getClassName();
-                        String methodName = new Throwable()
-                                .getStackTrace()[0]
-                                .getMethodName();
-                        int lineNumber = new Throwable()
-                                .getStackTrace()[0]
-                                .getLineNumber();
-                        String title = e.getLocalizedMessage();
-                        String data = e.getMessage();
-                        try {
-                            data = e.getMessage() + " # " + e.getCause().getMessage() + " # " +
-                                    e.getStackTrace().toString();
-                        } catch (Exception er) {
-                            er.printStackTrace();
-                        }
-                        addAppEventLog(LogType.EXCEPTION, LogTag.LOCATION_FETCH, title, data,
-                                className, methodName, lineNumber);
+
                     }
                     try {
                         latLngList.add(newLatLng);
@@ -448,26 +351,6 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
                         latLngStrUpdated = new String(data);
                     } catch (Exception e) {
                         e.printStackTrace();
-                        //App Event Log
-                        String className = new Throwable()
-                                .getStackTrace()[0]
-                                .getClassName();
-                        String methodName = new Throwable()
-                                .getStackTrace()[0]
-                                .getMethodName();
-                        int lineNumber = new Throwable()
-                                .getStackTrace()[0]
-                                .getLineNumber();
-                        String title = e.getLocalizedMessage();
-                        String data = e.getMessage();
-                        try {
-                            data = e.getMessage() + " # " + e.getCause().getMessage() + " # " +
-                                    e.getStackTrace().toString();
-                        } catch (Exception er) {
-                            er.printStackTrace();
-                        }
-                        addAppEventLog(LogType.EXCEPTION, LogTag.LOCATION_FETCH, title, data,
-                                className, methodName, lineNumber);
                     }
                 }
 //                else {
@@ -482,50 +365,11 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
                     setLatLngList(this, latLngStrUpdated);
                 } catch (Exception e) {
                     e.printStackTrace();
-                    //App Event Log
-                    String className = new Throwable()
-                            .getStackTrace()[0]
-                            .getClassName();
-                    String methodName = new Throwable()
-                            .getStackTrace()[0]
-                            .getMethodName();
-                    int lineNumber = new Throwable()
-                            .getStackTrace()[0]
-                            .getLineNumber();
-                    String title = e.getLocalizedMessage();
-                    String data = e.getMessage();
-                    try {
-                        data = e.getMessage() + " # " + e.getCause().getMessage() + " # " +
-                                e.getStackTrace().toString();
-                    } catch (Exception er) {
-                        er.printStackTrace();
-                    }
-                    addAppEventLog(LogType.EXCEPTION, LogTag.LOCATION_FETCH, title, data,
-                            className, methodName, lineNumber);
                 }
                 localBroadcastManager(mqData, ">>>BGS onNewLocation", "Send new location to flutter");
             } catch (Exception e) {
                 e.printStackTrace();
-                //App Event Log
-                String className = new Throwable()
-                        .getStackTrace()[0]
-                        .getClassName();
-                String methodName = new Throwable()
-                        .getStackTrace()[0]
-                        .getMethodName();
-                int lineNumber = new Throwable()
-                        .getStackTrace()[0]
-                        .getLineNumber();
-                String title = e.getLocalizedMessage();
-                String data = e.getMessage();
-                try {
-                    data = e.getMessage() + " # " + e.getCause().getMessage() + " # " +
-                            e.getStackTrace().toString();
-                } catch (Exception er) {
-                    er.printStackTrace();
-                }
-                addAppEventLog(LogType.EXCEPTION, LogTag.LOCATION_FETCH, title, data,
-                        className, methodName, lineNumber);
+
             }
         }
         try {
@@ -554,25 +398,6 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
                                     Log.d(">>> ApiCall-Failed > ", t.getMessage());
                                 }
 
-                                //App Event Log
-                                String className = new Throwable()
-                                        .getStackTrace()[0]
-                                        .getClassName();
-                                String methodName = new Throwable()
-                                        .getStackTrace()[0]
-                                        .getMethodName();
-                                int lineNumber = new Throwable()
-                                        .getStackTrace()[0]
-                                        .getLineNumber();
-                                String title = t.getLocalizedMessage();
-                                String data = t.getMessage();
-                                try {
-                                    data = t.getMessage() + " # " + t.getCause().getMessage() + " # " + t.getStackTrace().toString();
-                                } catch (Exception e) {
-                                    e.printStackTrace();
-                                }
-                                addAppEventLog(LogType.ERROR, LogTag.REST_API_CALL, title, data,
-                                        className, methodName, lineNumber);
                             }
                         });
                     }
@@ -602,25 +427,7 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
                                         Log.d(">>> ApiCall-Failed > ", t.getMessage());
                                     }
 
-                                    //App Event Log
-                                    String className = new Throwable()
-                                            .getStackTrace()[0]
-                                            .getClassName();
-                                    String methodName = new Throwable()
-                                            .getStackTrace()[0]
-                                            .getMethodName();
-                                    int lineNumber = new Throwable()
-                                            .getStackTrace()[0]
-                                            .getLineNumber();
-                                    String title = t.getLocalizedMessage();
-                                    String data = t.getMessage();
-                                    try {
-                                        data = t.getMessage() + " # " + t.getCause().getMessage() + " # " + t.getStackTrace().toString();
-                                    } catch (Exception e) {
-                                        e.printStackTrace();
-                                    }
-                                    addAppEventLog(LogType.ERROR, LogTag.REST_API_CALL, title, data,
-                                            className, methodName, lineNumber);
+
                                 }
                             });
                         }
@@ -629,26 +436,7 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
 
         } catch (Exception e) {
             e.printStackTrace();
-            //App Event Log
-            String className = new Throwable()
-                    .getStackTrace()[0]
-                    .getClassName();
-            String methodName = new Throwable()
-                    .getStackTrace()[0]
-                    .getMethodName();
-            int lineNumber = new Throwable()
-                    .getStackTrace()[0]
-                    .getLineNumber();
-            String title = e.getLocalizedMessage();
-            String data = e.getMessage();
-            try {
-                data = e.getMessage() + " # " + e.getCause().getMessage() + " # " +
-                        e.getStackTrace().toString();
-            } catch (Exception er) {
-                er.printStackTrace();
-            }
-            addAppEventLog(LogType.EXCEPTION, LogTag.LOCATION_FETCH, title, data,
-                    className, methodName, lineNumber);
+
         }
     }
 
@@ -668,25 +456,6 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
                         public void onResponse(Call<DriverLocation> call, Response<DriverLocation> response) {
                             if (isDebug)
                                 Log.d(">>> ApiCall-Success >", response.toString());
-
-//                            try {
-//                                //App Event Log
-//                                String className = new Throwable()
-//                                        .getStackTrace()[0]
-//                                        .getClassName();
-//                                String methodName = new Throwable()
-//                                        .getStackTrace()[0]
-//                                        .getMethodName();
-//                                int lineNumber = new Throwable()
-//                                        .getStackTrace()[0]
-//                                        .getLineNumber();
-//                                String title = "TESTING-MQ";
-//                                String data = "TESTING-MQ = " + isMqAlive;
-//                                addAppEventLog(LogType.ERROR, LogTag.REST_API_CALL, title, data,
-//                                        className, methodName, lineNumber);
-//                            } catch (Exception e) {
-//                                e.printStackTrace();
-//                            }
                         }
 
                         @Override
@@ -694,53 +463,12 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
                             if (isDebug) {
                                 Log.d(">>> ApiCall-Failed > ", t.getMessage());
                             }
-
-                            //App Event Log
-                            String className = new Throwable()
-                                    .getStackTrace()[0]
-                                    .getClassName();
-                            String methodName = new Throwable()
-                                    .getStackTrace()[0]
-                                    .getMethodName();
-                            int lineNumber = new Throwable()
-                                    .getStackTrace()[0]
-                                    .getLineNumber();
-                            String title = t.getLocalizedMessage() + " --- "
-                                    + (isMqAlive ? LogTag.MQ_CONNECTED.toString() : LogTag.MQ_DISCONNECTED.toString());
-                            String data = t.getMessage();
-                            try {
-                                data = t.getMessage() + " # " + t.getCause().getMessage() + " # " + t.getStackTrace().toString();
-                            } catch (Exception e) {
-                                e.printStackTrace();
-                            }
-                            addAppEventLog(LogType.ERROR, LogTag.REST_API_CALL, title, data,
-                                    className, methodName, lineNumber);
                         }
                     });
                 }
             }
         } catch (Exception e) {
             e.printStackTrace();
-            //App Event Log
-            String className = new Throwable()
-                    .getStackTrace()[0]
-                    .getClassName();
-            String methodName = new Throwable()
-                    .getStackTrace()[0]
-                    .getMethodName();
-            int lineNumber = new Throwable()
-                    .getStackTrace()[0]
-                    .getLineNumber();
-            String title = e.getLocalizedMessage();
-            String data = e.getMessage();
-            try {
-                data = e.getMessage() + " # " + e.getCause().getMessage() + " # " +
-                        e.getStackTrace().toString();
-            } catch (Exception er) {
-                er.printStackTrace();
-            }
-            addAppEventLog(LogType.EXCEPTION, isMqAlive ? LogTag.MQ_CONNECTED : LogTag.MQ_DISCONNECTED, title, data,
-                    className, methodName, lineNumber);
         }
     }
 
@@ -803,26 +531,6 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
             }
         } catch (Exception e) {
             e.printStackTrace();
-            //App Event Log
-            String className = new Throwable()
-                    .getStackTrace()[0]
-                    .getClassName();
-            String methodName = new Throwable()
-                    .getStackTrace()[0]
-                    .getMethodName();
-            int lineNumber = new Throwable()
-                    .getStackTrace()[0]
-                    .getLineNumber();
-            String title = e.getLocalizedMessage();
-            String data = e.getMessage();
-            try {
-                data = e.getMessage() + " # " + e.getCause().getMessage() + " # " +
-                        e.getStackTrace().toString();
-            } catch (Exception er) {
-                er.printStackTrace();
-            }
-            addAppEventLog(LogType.EXCEPTION, isMqAlive ? LogTag.MQ_CONNECTED : LogTag.MQ_DISCONNECTED, title, data,
-                    className, methodName, lineNumber);
         }
     }
 
@@ -840,26 +548,7 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
             if (isDebug) {
                 Log.d(TAG, "Lost location permission. Could not request updates");
             }
-            //App Event Log
-            String className = new Throwable()
-                    .getStackTrace()[0]
-                    .getClassName();
-            String methodName = new Throwable()
-                    .getStackTrace()[0]
-                    .getMethodName();
-            int lineNumber = new Throwable()
-                    .getStackTrace()[0]
-                    .getLineNumber();
-            String title = e.getLocalizedMessage();
-            String data = e.getMessage();
-            try {
-                data = e.getMessage() + " # " + e.getCause().getMessage() + " # " +
-                        e.getStackTrace().toString();
-            } catch (Exception er) {
-                er.printStackTrace();
-            }
-            addAppEventLog(LogType.EXCEPTION, LogTag.LOCATION_FETCH, title, data,
-                    className, methodName, lineNumber);
+
         }
     }
 
@@ -890,27 +579,6 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
                         localBroadcastManager(currentLocation, ">>> BGS CurrentLoc ", "broadcast getCurrentLocation");
                     } catch (JSONException e) {
                         e.printStackTrace();
-
-                        //App Event Log
-                        String className = new Throwable()
-                                .getStackTrace()[0]
-                                .getClassName();
-                        String methodName = new Throwable()
-                                .getStackTrace()[0]
-                                .getMethodName();
-                        int lineNumber = new Throwable()
-                                .getStackTrace()[0]
-                                .getLineNumber();
-                        String title = e.getLocalizedMessage();
-                        String data = e.getMessage();
-                        try {
-                            data = e.getMessage() + " # " + e.getCause().getMessage() + " # " +
-                                    e.getStackTrace().toString();
-                        } catch (Exception er) {
-                            er.printStackTrace();
-                        }
-                        addAppEventLog(LogType.EXCEPTION, LogTag.LOCATION_FETCH, title, data,
-                                className, methodName, lineNumber);
                     }
                 }
             });
@@ -919,26 +587,7 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
             if (isDebug) {
                 Log.d(TAG, "Lost location permission. Could not request updates");
             }
-            //App Event Log
-            String className = new Throwable()
-                    .getStackTrace()[0]
-                    .getClassName();
-            String methodName = new Throwable()
-                    .getStackTrace()[0]
-                    .getMethodName();
-            int lineNumber = new Throwable()
-                    .getStackTrace()[0]
-                    .getLineNumber();
-            String title = e.getLocalizedMessage();
-            String data = e.getMessage();
-            try {
-                data = e.getMessage() + " # " + e.getCause().getMessage() + " # " +
-                        e.getStackTrace().toString();
-            } catch (Exception er) {
-                er.printStackTrace();
-            }
-            addAppEventLog(LogType.EXCEPTION, LogTag.LOCATION_FETCH, title, data,
-                    className, methodName, lineNumber);
+
         }
 
     }
@@ -953,27 +602,6 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
             if (isDebug) {
                 Log.d(TAG, "Lost location permission. Could not remove updates. $unlikely");
             }
-            //App Event Log
-            String className = new Throwable()
-                    .getStackTrace()[0]
-                    .getClassName();
-            String methodName = new Throwable()
-                    .getStackTrace()[0]
-                    .getMethodName();
-            int lineNumber = new Throwable()
-                    .getStackTrace()[0]
-                    .getLineNumber();
-            String title = e.getLocalizedMessage();
-            String data = e.getMessage();
-            try {
-                data = e.getMessage() + " # " + e.getCause().getMessage() + " # " +
-                        e.getStackTrace().toString();
-            } catch (Exception er) {
-                er.printStackTrace();
-            }
-            addAppEventLog(LogType.EXCEPTION, LogTag.LOCATION_FETCH, title, data,
-                    className, methodName, lineNumber);
-
         }
     }
 
@@ -1003,40 +631,12 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
             if (!isManuallyStopped) {
                 enqueue(this);
 
-                //App Event Log
-                String className = new Throwable()
-                        .getStackTrace()[0]
-                        .getClassName();
-                String methodName = new Throwable()
-                        .getStackTrace()[0]
-                        .getMethodName();
-                int lineNumber = new Throwable()
-                        .getStackTrace()[0]
-                        .getLineNumber();
-                String title = "Bg Service Stopped";
-                String data = "Service Stopped";
-                addAppEventLog(LogType.DEBUG, LogTag.SERVICE_ENDED, title, data,
-                        className, methodName, lineNumber);
             } else {
                 setManuallyStopped(true);
                 if (isDebug) {
                     Log.d(">>> BGS onDestroy()", "onDestroy() is called || setManuallyStopped = true");
                 }
 
-                //App Event Log
-                String className = new Throwable()
-                        .getStackTrace()[0]
-                        .getClassName();
-                String methodName = new Throwable()
-                        .getStackTrace()[0]
-                        .getMethodName();
-                int lineNumber = new Throwable()
-                        .getStackTrace()[0]
-                        .getLineNumber();
-                String title = "Bg Service Stopped Manually";
-                String data = "On Destroy Manually stopped";
-                addAppEventLog(LogType.DEBUG, LogTag.SERVICE_ENDED, title, data,
-                        className, methodName, lineNumber);
             }
             stopForeground(true);
             isRunning.set(false);
@@ -1152,21 +752,6 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
             e.printStackTrace();
         }
 
-//        //App Event Log
-//        String className = new Throwable()
-//                .getStackTrace()[0]
-//                .getClassName();
-//        String methodName = new Throwable()
-//                .getStackTrace()[0]
-//                .getMethodName();
-//        int lineNumber = new Throwable()
-//                .getStackTrace()[0]
-//                .getLineNumber();
-//        String title = "On Start Command";
-//        String data = "On Start Command";
-//        addAppEventLog(LogType.DEBUG, LogTag.SERVICE_STARTED, title, data,
-//                className, methodName, lineNumber);
-
         return START_STICKY;
     }
 
@@ -1182,52 +767,19 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
             connectivityManager.requestNetwork(networkRequest, networkCallback);
         } catch (Exception e) {
             e.printStackTrace();
-            //App Event Log
-            String className = new Throwable()
-                    .getStackTrace()[0]
-                    .getClassName();
-            String methodName = new Throwable()
-                    .getStackTrace()[0]
-                    .getMethodName();
-            int lineNumber = new Throwable()
-                    .getStackTrace()[0]
-                    .getLineNumber();
-            String title = e.getLocalizedMessage();
-            String data = e.getMessage();
-            try {
-                data = e.getMessage() + " # " + e.getCause().getMessage() + " # " +
-                        e.getStackTrace().toString();
-            } catch (Exception er) {
-                er.printStackTrace();
-            }
-            addAppEventLog(LogType.DEBUG, LogTag.LOCATION_FETCH, title, data,
-                    className, methodName, lineNumber);
+
         }
     }
 
     AtomicBoolean isRunning = new AtomicBoolean(false);
 
+
     private void runService() {
         try {
-
             if (isDebug) {
                 Log.d(">>> BGS runService ", "runService is called");
             }
             if (isRunning.get() || (backgroundEngine != null && !backgroundEngine.getDartExecutor().isExecutingDart())) {
-//                //App Event Log
-//                String className = new Throwable()
-//                        .getStackTrace()[0]
-//                        .getClassName();
-//                String methodName = new Throwable()
-//                        .getStackTrace()[0]
-//                        .getMethodName();
-//                int lineNumber = new Throwable()
-//                        .getStackTrace()[0]
-//                        .getLineNumber();
-//                String title = "Is Running is True";
-//                String data = "Is running is true or backgroundEngin is not null and isExecutingDart is false ";
-//                addAppEventLog(LogType.DEBUG, LogTag.SERVICE_RUNNING, title, data,
-//                        className, methodName, lineNumber);
                 return;
             }
 
@@ -1241,20 +793,6 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
                     Log.e("BGS >>> callback ", "callback handle not found");
                 }
 
-                //App Event Log
-                String className = new Throwable()
-                        .getStackTrace()[0]
-                        .getClassName();
-                String methodName = new Throwable()
-                        .getStackTrace()[0]
-                        .getMethodName();
-                int lineNumber = new Throwable()
-                        .getStackTrace()[0]
-                        .getLineNumber();
-                String title = "Callback is null";
-                String data = "Callback handle not found";
-                addAppEventLog(LogType.DEBUG, LogTag.SERVICE_RUNNING, title, data,
-                        className, methodName, lineNumber);
                 return;
             }
 
@@ -1271,21 +809,6 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
 
             updateNotificationInfo();
 
-//            //App Event Log
-//            String className = new Throwable()
-//                    .getStackTrace()[0]
-//                    .getClassName();
-//            String methodName = new Throwable()
-//                    .getStackTrace()[0]
-//                    .getMethodName();
-//            int lineNumber = new Throwable()
-//                    .getStackTrace()[0]
-//                    .getLineNumber();
-//            String title = "Bg Service runing";
-//            String data = "Update Notification info called";
-//            addAppEventLog(LogType.DEBUG, LogTag.SERVICE_RUNNING, title, data,
-//                    className, methodName, lineNumber);
-
         } catch (UnsatisfiedLinkError e) {
             notificationContent = "Error " + e.getMessage();
             updateNotificationInfo();
@@ -1293,26 +816,6 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
             if (isDebug) {
                 Log.w("BGS >>> ERROR", "UnsatisfiedLinkError: After a reboot this may happen for a short period and it is ok to ignore then!" + e.getMessage());
             }
-            //App Event Log
-            String className = new Throwable()
-                    .getStackTrace()[0]
-                    .getClassName();
-            String methodName = new Throwable()
-                    .getStackTrace()[0]
-                    .getMethodName();
-            int lineNumber = new Throwable()
-                    .getStackTrace()[0]
-                    .getLineNumber();
-            String title = e.getLocalizedMessage();
-            String data = e.getMessage();
-            try {
-                data = e.getMessage() + " # " + e.getCause().getMessage() + " # " +
-                        e.getStackTrace().toString();
-            } catch (Exception er) {
-                er.printStackTrace();
-            }
-            addAppEventLog(LogType.ERROR, LogTag.SERVICE_RUNNING, title, data,
-                    className, methodName, lineNumber);
         }
     }
 
@@ -1335,21 +838,6 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
                             isMqAlive = true;
                             onMqttConnected();
                             handleSubscriptionResponse();
-
-                            //App Event Log
-                            String className = new Throwable()
-                                    .getStackTrace()[0]
-                                    .getClassName();
-                            String methodName = new Throwable()
-                                    .getStackTrace()[0]
-                                    .getMethodName();
-                            int lineNumber = new Throwable()
-                                    .getStackTrace()[0]
-                                    .getLineNumber();
-                            String title = "In Mq connected";
-                            String data = "mq is connected";
-                            addAppEventLog(LogType.DEBUG, LogTag.MQ_CONNECTED, title, data,
-                                    className, methodName, lineNumber);
 
                             if (connectTimer != null) {
                                 connectTimer.cancel();
@@ -1375,20 +863,7 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
                                     }
                                 }, PERIOD * 1000, PERIOD * 1000);
                             }
-                            //App Event Log
-                            String className = new Throwable()
-                                    .getStackTrace()[0]
-                                    .getClassName();
-                            String methodName = new Throwable()
-                                    .getStackTrace()[0]
-                                    .getMethodName();
-                            int lineNumber = new Throwable()
-                                    .getStackTrace()[0]
-                                    .getLineNumber();
-                            String title = "MQ disconnected";
-                            String data = "mq disconnected";
-                            addAppEventLog(LogType.DEBUG, LogTag.MQ_DISCONNECTED, title, data,
-                                    className, methodName, lineNumber);
+
                         } catch (Exception exception) {
                             exception.printStackTrace();
                         }
@@ -1429,30 +904,6 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
                     }
                 } catch (Exception e) {
                     e.printStackTrace();
-                    //App Event Log
-                    String className = new Throwable()
-                            .getStackTrace()[0]
-                            .getClassName();
-                    String methodName = new Throwable()
-                            .getStackTrace()[0]
-                            .getMethodName();
-                    int lineNumber = new Throwable()
-                            .getStackTrace()[0]
-                            .getLineNumber();
-                    String title = e.getLocalizedMessage();
-                    String data = e.getMessage();
-                    try {
-                        data = e.getMessage() + " # " + e.getCause().getMessage() + " # " +
-                                e.getStackTrace().toString();
-                    } catch (Exception er) {
-                        er.printStackTrace();
-                    }
-                    try {
-                        addAppEventLog(LogType.DEBUG, LogTag.LOCATION_FETCH, title, data,
-                                className, methodName, lineNumber);
-                    } catch (Exception exception) {
-                        exception.printStackTrace();
-                    }
                 }
             }
 
@@ -1460,26 +911,6 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
             subscribeTopicsFromLastSession();
         } catch (JSONException e) {
             e.printStackTrace();
-            //App Event Log
-            String className = new Throwable()
-                    .getStackTrace()[0]
-                    .getClassName();
-            String methodName = new Throwable()
-                    .getStackTrace()[0]
-                    .getMethodName();
-            int lineNumber = new Throwable()
-                    .getStackTrace()[0]
-                    .getLineNumber();
-            String title = e.getLocalizedMessage();
-            String data = e.getMessage();
-            try {
-                data = e.getMessage() + " # " + e.getCause().getMessage() + " # " +
-                        e.getStackTrace().toString();
-            } catch (Exception er) {
-                er.printStackTrace();
-            }
-            addAppEventLog(LogType.DEBUG, LogTag.LOCATION_FETCH, title, data,
-                    className, methodName, lineNumber);
         }
     }
 
@@ -1498,20 +929,6 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
                 Log.d(">>> BGS connectMqtt", "hive_client.toAsync().connectWith()");
             }
 
-//            //App Event Log
-//            String className = new Throwable()
-//                    .getStackTrace()[0]
-//                    .getClassName();
-//            String methodName = new Throwable()
-//                    .getStackTrace()[0]
-//                    .getMethodName();
-//            int lineNumber = new Throwable()
-//                    .getStackTrace()[0]
-//                    .getLineNumber();
-//            String title = "MQ connect trying";
-//            String data = "mq connection trying";
-//            addAppEventLog(LogType.DEBUG, LogTag.MQ_CONNECT_TRY, title, data,
-//                    className, methodName, lineNumber);
         }
     }
 
@@ -1533,26 +950,7 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
             tpType = valuesPart3[1];
         } catch (Exception e) {
             e.printStackTrace();
-            //App Event Log
-            String className = new Throwable()
-                    .getStackTrace()[0]
-                    .getClassName();
-            String methodName = new Throwable()
-                    .getStackTrace()[0]
-                    .getMethodName();
-            int lineNumber = new Throwable()
-                    .getStackTrace()[0]
-                    .getLineNumber();
-            String title = e.getLocalizedMessage();
-            String data = e.getMessage();
-            try {
-                data = e.getMessage() + " # " + e.getCause().getMessage() + " # " +
-                        e.getStackTrace().toString();
-            } catch (Exception er) {
-                er.printStackTrace();
-            }
-            addAppEventLog(LogType.EXCEPTION, LogTag.MQ_MSG_RECEIVED, title, data,
-                    className, methodName, lineNumber);
+
         }
 
         if (bookingCounterTimer == null) {
@@ -1570,26 +968,6 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
                         localBroadcastManager(mqData, ">>> TickTick > ", " Timer Tick " + timerCurrentTick);
                     } catch (Exception e) {
                         e.printStackTrace();
-                        //App Event Log
-                        String className = new Throwable()
-                                .getStackTrace()[0]
-                                .getClassName();
-                        String methodName = new Throwable()
-                                .getStackTrace()[0]
-                                .getMethodName();
-                        int lineNumber = new Throwable()
-                                .getStackTrace()[0]
-                                .getLineNumber();
-                        String title = e.getLocalizedMessage();
-                        String data = e.getMessage();
-                        try {
-                            data = e.getMessage() + " # " + e.getCause().getMessage() + " # " +
-                                    e.getStackTrace().toString();
-                        } catch (Exception er) {
-                            er.printStackTrace();
-                        }
-                        addAppEventLog(LogType.DEBUG, LogTag.LOCATION_FETCH, title, data,
-                                className, methodName, lineNumber);
                     }
                     if (timerCurrentTick <= 0 && !isBookingTimerCancelled) {
                         cancelBookingTimer();
@@ -1694,26 +1072,7 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
                                 });
                             } catch (Exception e) {
                                 e.printStackTrace();
-                                //App Event Log
-                                String className = new Throwable()
-                                        .getStackTrace()[0]
-                                        .getClassName();
-                                String methodName = new Throwable()
-                                        .getStackTrace()[0]
-                                        .getMethodName();
-                                int lineNumber = new Throwable()
-                                        .getStackTrace()[0]
-                                        .getLineNumber();
-                                String title = e.getLocalizedMessage();
-                                String data = e.getMessage();
-                                try {
-                                    data = e.getMessage() + " # " + e.getCause().getMessage() + " # " +
-                                            e.getStackTrace().toString();
-                                } catch (Exception er) {
-                                    er.printStackTrace();
-                                }
-                                addAppEventLog(LogType.DEBUG, LogTag.LOCATION_FETCH, title, data,
-                                        className, methodName, lineNumber);
+
                             }
                         } else {
                             //sending to customer mobile app
@@ -1727,45 +1086,12 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
                             Log.d(">>> ApiCall-Failed > ", t.getMessage());
                         }
 
-                        //App Event Log
-                        String className = new Throwable()
-                                .getStackTrace()[0]
-                                .getClassName();
-                        String methodName = new Throwable()
-                                .getStackTrace()[0]
-                                .getMethodName();
-                        int lineNumber = new Throwable()
-                                .getStackTrace()[0]
-                                .getLineNumber();
-                        String title = "AUTO PASS api call";
-                        String data = t.getMessage();
-                        addAppEventLog(LogType.ERROR, LogTag.REST_API_CALL, title, data,
-                                className, methodName, lineNumber);
                     }
                 });
             }
         } catch (Exception e) {
             e.printStackTrace();
-            //App Event Log
-            String className = new Throwable()
-                    .getStackTrace()[0]
-                    .getClassName();
-            String methodName = new Throwable()
-                    .getStackTrace()[0]
-                    .getMethodName();
-            int lineNumber = new Throwable()
-                    .getStackTrace()[0]
-                    .getLineNumber();
-            String title = e.getLocalizedMessage();
-            String data = e.getMessage();
-            try {
-                data = e.getMessage() + " # " + e.getCause().getMessage() + " # " +
-                        e.getStackTrace().toString();
-            } catch (Exception er) {
-                er.printStackTrace();
-            }
-            addAppEventLog(LogType.DEBUG, LogTag.LOCATION_FETCH, title, data,
-                    className, methodName, lineNumber);
+
         }
     }
 
@@ -1848,50 +1174,12 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
                                 localBroadcastManager(mqData, ">>> BGS >>>  ", "handleSubscriptionResponse broadcast");
                             } catch (Exception e) {
                                 e.printStackTrace();
-                                //App Event Log
-                                String className = new Throwable()
-                                        .getStackTrace()[0]
-                                        .getClassName();
-                                String methodName = new Throwable()
-                                        .getStackTrace()[0]
-                                        .getMethodName();
-                                int lineNumber = new Throwable()
-                                        .getStackTrace()[0]
-                                        .getLineNumber();
-                                String title = e.getLocalizedMessage();
-                                String data = e.getMessage();
-                                try {
-                                    data = e.getMessage() + " # " + e.getCause().getMessage() + " # " +
-                                            e.getStackTrace().toString();
-                                } catch (Exception er) {
-                                    er.printStackTrace();
-                                }
-                                addAppEventLog(LogType.DEBUG, LogTag.LOCATION_FETCH, title, data,
-                                        className, methodName, lineNumber);
+
                             }
                         }
                     } catch (JSONException e) {
                         e.printStackTrace();
-                        //App Event Log
-                        String className = new Throwable()
-                                .getStackTrace()[0]
-                                .getClassName();
-                        String methodName = new Throwable()
-                                .getStackTrace()[0]
-                                .getMethodName();
-                        int lineNumber = new Throwable()
-                                .getStackTrace()[0]
-                                .getLineNumber();
-                        String title = e.getLocalizedMessage();
-                        String data = e.getMessage();
-                        try {
-                            data = e.getMessage() + " # " + e.getCause().getMessage() + " # " +
-                                    e.getStackTrace().toString();
-                        } catch (Exception er) {
-                            er.printStackTrace();
-                        }
-                        addAppEventLog(LogType.DEBUG, LogTag.LOCATION_FETCH, title, data,
-                                className, methodName, lineNumber);
+
                     }
                 });
     }
@@ -1941,26 +1229,7 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
             }
         } catch (Exception e) {
             e.printStackTrace();
-            //App Event Log
-            String className = new Throwable()
-                    .getStackTrace()[0]
-                    .getClassName();
-            String methodName = new Throwable()
-                    .getStackTrace()[0]
-                    .getMethodName();
-            int lineNumber = new Throwable()
-                    .getStackTrace()[0]
-                    .getLineNumber();
-            String title = e.getLocalizedMessage();
-            String data = e.getMessage();
-            try {
-                data = e.getMessage() + " # " + e.getCause().getMessage() + " # " +
-                        e.getStackTrace().toString();
-            } catch (Exception er) {
-                er.printStackTrace();
-            }
-            addAppEventLog(LogType.DEBUG, LogTag.LOCATION_FETCH, title, data,
-                    className, methodName, lineNumber);
+
         }
 
         Log.d("publish topic >>>>>>>> ", top);
@@ -1987,26 +1256,7 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
             }
         } catch (Exception e) {
             e.printStackTrace();
-            //App Event Log
-            String className = new Throwable()
-                    .getStackTrace()[0]
-                    .getClassName();
-            String methodName = new Throwable()
-                    .getStackTrace()[0]
-                    .getMethodName();
-            int lineNumber = new Throwable()
-                    .getStackTrace()[0]
-                    .getLineNumber();
-            String title = e.getLocalizedMessage();
-            String data = e.getMessage();
-            try {
-                data = e.getMessage() + " # " + e.getCause().getMessage() + " # " +
-                        e.getStackTrace().toString();
-            } catch (Exception er) {
-                er.printStackTrace();
-            }
-            addAppEventLog(LogType.DEBUG, LogTag.LOCATION_FETCH, title, data,
-                    className, methodName, lineNumber);
+
         }
     }
 
@@ -2060,51 +1310,13 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
                 }
             } catch (Exception e) {
                 e.printStackTrace();
-                //App Event Log
-                String className = new Throwable()
-                        .getStackTrace()[0]
-                        .getClassName();
-                String methodName = new Throwable()
-                        .getStackTrace()[0]
-                        .getMethodName();
-                int lineNumber = new Throwable()
-                        .getStackTrace()[0]
-                        .getLineNumber();
-                String title = e.getLocalizedMessage();
-                String data2 = e.getMessage();
-                try {
-                    data2 = e.getMessage() + " # " + e.getCause().getMessage() + " # " +
-                            e.getStackTrace().toString();
-                } catch (Exception er) {
-                    er.printStackTrace();
-                }
-                addAppEventLog(LogType.DEBUG, LogTag.LOCATION_FETCH, title, data2,
-                        className, methodName, lineNumber);
+
             }
             try {
                 methodChannel.invokeMethod("onReceiveData", data);
             } catch (Exception e) {
                 e.printStackTrace();
-                //App Event Log
-                String className = new Throwable()
-                        .getStackTrace()[0]
-                        .getClassName();
-                String methodName = new Throwable()
-                        .getStackTrace()[0]
-                        .getMethodName();
-                int lineNumber = new Throwable()
-                        .getStackTrace()[0]
-                        .getLineNumber();
-                String title = e.getLocalizedMessage();
-                String data3 = e.getMessage();
-                try {
-                    data3 = e.getMessage() + " # " + e.getCause().getMessage() + " # " +
-                            e.getStackTrace().toString();
-                } catch (Exception er) {
-                    er.printStackTrace();
-                }
-                addAppEventLog(LogType.DEBUG, LogTag.LOCATION_FETCH, title, data3,
-                        className, methodName, lineNumber);
+
             }
         }
     }
@@ -2190,26 +1402,7 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
                 Log.e(TAG, e.getMessage());
             }
             e.printStackTrace();
-            //App Event Log
-            String className = new Throwable()
-                    .getStackTrace()[0]
-                    .getClassName();
-            String methodName = new Throwable()
-                    .getStackTrace()[0]
-                    .getMethodName();
-            int lineNumber = new Throwable()
-                    .getStackTrace()[0]
-                    .getLineNumber();
-            String title = e.getLocalizedMessage();
-            String data = e.getMessage();
-            try {
-                data = e.getMessage() + " # " + e.getCause().getMessage() + " # " +
-                        e.getStackTrace().toString();
-            } catch (Exception er) {
-                er.printStackTrace();
-            }
-            addAppEventLog(LogType.DEBUG, LogTag.LOCATION_FETCH, title, data,
-                    className, methodName, lineNumber);
+
         }
 
         result.notImplemented();
@@ -2296,52 +1489,14 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
                                 finalMediaPlayer = null;
                             } catch (Exception e) {
                                 e.printStackTrace();
-                                //App Event Log
-                                String className = new Throwable()
-                                        .getStackTrace()[0]
-                                        .getClassName();
-                                String methodName = new Throwable()
-                                        .getStackTrace()[0]
-                                        .getMethodName();
-                                int lineNumber = new Throwable()
-                                        .getStackTrace()[0]
-                                        .getLineNumber();
-                                String title = e.getLocalizedMessage();
-                                String data = e.getMessage();
-                                try {
-                                    data = e.getMessage() + " # " + e.getCause().getMessage() + " # " +
-                                            e.getStackTrace().toString();
-                                } catch (Exception er) {
-                                    er.printStackTrace();
-                                }
-                                addAppEventLog(LogType.DEBUG, LogTag.LOCATION_FETCH, title, data,
-                                        className, methodName, lineNumber);
+
                             }
                         });
                     }
                 } catch (Exception e) {
                     stopBookingSound();
                     updateNotificationInfo();
-                    //App Event Log
-                    String className = new Throwable()
-                            .getStackTrace()[0]
-                            .getClassName();
-                    String methodName = new Throwable()
-                            .getStackTrace()[0]
-                            .getMethodName();
-                    int lineNumber = new Throwable()
-                            .getStackTrace()[0]
-                            .getLineNumber();
-                    String title = e.getLocalizedMessage();
-                    String data = e.getMessage();
-                    try {
-                        data = e.getMessage() + " # " + e.getCause().getMessage() + " # " +
-                                e.getStackTrace().toString();
-                    } catch (Exception er) {
-                        er.printStackTrace();
-                    }
-                    addAppEventLog(LogType.DEBUG, LogTag.LOCATION_FETCH, title, data,
-                            className, methodName, lineNumber);
+
                 }
                 try {
 //                    final ByteArrayOutputStream out = new ByteArrayOutputStream();
@@ -2351,26 +1506,7 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
                     setLatLngList(this, emptyListStr);
                 } catch (Exception e) {
                     e.printStackTrace();
-                    //App Event Log
-                    String className = new Throwable()
-                            .getStackTrace()[0]
-                            .getClassName();
-                    String methodName = new Throwable()
-                            .getStackTrace()[0]
-                            .getMethodName();
-                    int lineNumber = new Throwable()
-                            .getStackTrace()[0]
-                            .getLineNumber();
-                    String title = e.getLocalizedMessage();
-                    String data = e.getMessage();
-                    try {
-                        data = e.getMessage() + " # " + e.getCause().getMessage() + " # " +
-                                e.getStackTrace().toString();
-                    } catch (Exception er) {
-                        er.printStackTrace();
-                    }
-                    addAppEventLog(LogType.DEBUG, LogTag.LOCATION_FETCH, title, data,
-                            className, methodName, lineNumber);
+
                 }
             } else if (notificationType == NotificationType.BOOKING_CANCELLED) {
                 NotificationCompat.Builder builder = new NotificationCompat.Builder(this, "FOREGROUND_DEFAULT")
@@ -2389,26 +1525,7 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
 
                 } catch (Exception e) {
                     e.printStackTrace();
-                    //App Event Log
-                    String className = new Throwable()
-                            .getStackTrace()[0]
-                            .getClassName();
-                    String methodName = new Throwable()
-                            .getStackTrace()[0]
-                            .getMethodName();
-                    int lineNumber = new Throwable()
-                            .getStackTrace()[0]
-                            .getLineNumber();
-                    String title = e.getLocalizedMessage();
-                    String data = e.getMessage();
-                    try {
-                        data = e.getMessage() + " # " + e.getCause().getMessage() + " # " +
-                                e.getStackTrace().toString();
-                    } catch (Exception er) {
-                        er.printStackTrace();
-                    }
-                    addAppEventLog(LogType.DEBUG, LogTag.LOCATION_FETCH, title, data,
-                            className, methodName, lineNumber);
+
                 }
             } else if (notificationType == NotificationType.PAYMENT_DONE) {
                 NotificationCompat.Builder builder = new NotificationCompat.Builder(this, "FOREGROUND_DEFAULT")
@@ -2451,6 +1568,22 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
         MQ_MSG_TO_FLUTTER_APP,
         REST_API_CALL,
         LOCATION_FETCH
+    }
+
+
+    public void logEvent(String title, String data){
+        //App Event Log
+        String className = new Throwable()
+                .getStackTrace()[0]
+                .getClassName();
+        String methodName = new Throwable()
+                .getStackTrace()[0]
+                .getMethodName();
+        int lineNumber = new Throwable()
+                .getStackTrace()[0]
+                .getLineNumber();
+        addAppEventLog(LogType.DEBUG, LogTag.SERVICE_RUNNING, title, data,
+                className, methodName, lineNumber);
     }
 
     //new Throwable().getStackTrace()[0].getLineNumber()
