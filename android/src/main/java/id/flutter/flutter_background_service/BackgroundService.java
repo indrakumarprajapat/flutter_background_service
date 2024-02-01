@@ -86,108 +86,40 @@ import retrofit2.Callback;
 import retrofit2.Response;
 
 public class BackgroundService extends Service implements MethodChannel.MethodCallHandler {
-    static final int PASS_TIMEOUT = 30;
     private static final String TAG = "BackgroundService";
-    private static final String LOCK_NAME = BackgroundService.class.getName() + ".Lock";
-    public static String rideReferenceNo;
-    public static String messageOnNewTrip;
-    public static String tripType;
-    public static String tpType;
-    public static String customerId = "0";
-    static boolean isDebug = true;
-    static int timerCurrentTick = PASS_TIMEOUT;
-    static boolean isBookingTimerCancelled = false;
-    private static volatile WakeLock lockStatic = null; // notice static
-    Mqtt3AsyncClient hive_client;
-    boolean isMqAlive = false;
-    String notificationTitle = "Boom Cabs Partner";
-    String notificationContent = "...";
-    MediaPlayer finalMediaPlayer;
-    NotificationManager bookingnotificationManager;
-    Timer connectTimer = null;
-    Timer infiniteTimer;
-    ObjectMapper objectMapper = new ObjectMapper();
-    AtomicBoolean isRunning = new AtomicBoolean(false);
-    Timer bookingCounterTimer = null;
     private FlutterEngine backgroundEngine;
     private MethodChannel methodChannel;
     private DartExecutor.DartCallback dartCallback;
     private boolean isManuallyStopped = false;
+    Mqtt3AsyncClient hive_client;
+
     private boolean showNotificationBackground = false;
-    private final Application.ActivityLifecycleCallbacks activityLifecycleCallbacks = new Application.ActivityLifecycleCallbacks() {
 
-
-        @Override
-        public void onActivityCreated(@NonNull Activity activity, @Nullable Bundle savedInstanceState) {
-
-        }
-
-        @Override
-        public void onActivityStarted(@NonNull Activity activity) {
-
-        }
-
-        @Override
-        public void onActivityResumed(Activity activity) {
-            showNotificationBackground = false;
-        }
-
-        @Override
-        public void onActivityPaused(Activity activity) {
-            showNotificationBackground = true;
-        }
-
-
-        @Override
-        public void onActivityStopped(@NonNull Activity activity) {
-
-        }
-
-        @Override
-        public void onActivitySaveInstanceState(@NonNull Activity activity, @NonNull Bundle outState) {
-
-        }
-
-        @Override
-        public void onActivityDestroyed(@NonNull Activity activity) {
-
-        }
-
-        // Other lifecycle callback methods...
-    };
     private HashSet<String> topicList;
+
+    boolean isMqAlive = false;
+    String notificationTitle = "Boom Cabs Partner";
+    String notificationContent = "...";
+    MediaPlayer finalMediaPlayer;
+    static boolean isDebug = true;
+
+    private static final String LOCK_NAME = BackgroundService.class.getName() + ".Lock";
+    private static volatile WakeLock lockStatic = null; // notice static
     //Location
     private LocationRequest locationRequest;
     private FusedLocationProviderClient fusedLocationProviderClient;
     private LocationCallback locationCallback;
     private Location currentLocation;
     private boolean isTrackLocRemotly = false;
-    @RequiresApi(api = Build.VERSION_CODES.LOLLIPOP)
-    private ConnectivityManager.NetworkCallback networkCallback = new ConnectivityManager.NetworkCallback() {
-        @Override
-        public void onAvailable(@NonNull Network network) {
-            super.onAvailable(network);
-            connectMqtt();
-            if (isDebug) {
-                Log.d(">>>> BGS conection >>>", "onAvailable(network)");
-            }
-        }
 
-        @Override
-        public void onLost(@NonNull Network network) {
-            super.onLost(network);
-            if (isDebug) {
-                Log.d(">>>> BGS conection >>>", ".onLost(network)");
-            }
-        }
+    public static String rideReferenceNo;
+    public static String messageOnNewTrip;
+    public static String tripType;
+    public static String tpType;
+    public static String customerId = "0";
+    NotificationManager bookingnotificationManager;
 
-        @Override
-        public void onCapabilitiesChanged(@NonNull Network network, @NonNull NetworkCapabilities networkCapabilities) {
-            super.onCapabilitiesChanged(network, networkCapabilities);
-            boolean hasCellular = networkCapabilities.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR);
-            boolean hasWifi = networkCapabilities.hasTransport(NetworkCapabilities.TRANSPORT_WIFI);
-        }
-    };
+    Timer connectTimer = null;
 
     {
         topicList = new HashSet<>();
@@ -200,6 +132,11 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
             lockStatic.setReferenceCounted(true);
         }
         return (lockStatic);
+    }
+
+    @Override
+    public IBinder onBind(Intent intent) {
+        return null;
     }
 
     public static void enqueue(Context context) {
@@ -248,108 +185,6 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
 //        alarmManager.setRepeating(AlarmManager.RTC_WAKEUP, alarmTime, timeInterval , pIntent);
     }
 
-    public static boolean isAutoStartOnBootMode(Context context) {
-        SharedPreferences pref = context.getSharedPreferences("id.flutter.background_service", MODE_PRIVATE);
-        return pref.getBoolean("auto_start_on_boot", true);
-    }
-
-    public static boolean isForegroundService(Context context) {
-        SharedPreferences pref = context.getSharedPreferences("id.flutter.background_service", MODE_PRIVATE);
-        return pref.getBoolean("is_foreground", true);
-    }
-
-    public static boolean isServiceStart(Context context) {
-        SharedPreferences pref = context.getSharedPreferences("id.flutter.background_service", MODE_PRIVATE);
-        return pref.getBoolean("is_service_start", true);
-    }
-
-    public static boolean isManuallyStopped(Context context) {
-        SharedPreferences pref = context.getSharedPreferences("id.flutter.background_service", MODE_PRIVATE);
-        return pref.getBoolean("is_manually_stopped", false);
-    }
-
-    public static String getMqServerHost(Context context) {
-        SharedPreferences pref = context.getSharedPreferences("id.flutter.background_service", MODE_PRIVATE);
-        return pref.getString("mq_server_host", "");
-    }
-
-    // Location >>>>>
-
-    public static String getMqClientId(Context context) {
-        SharedPreferences pref = context.getSharedPreferences("id.flutter.background_service", MODE_PRIVATE);
-        return pref.getString("mq_client_id", "");
-    }
-
-    public static int getMqPort(Context context) {
-        SharedPreferences pref = context.getSharedPreferences("id.flutter.background_service", MODE_PRIVATE);
-        return pref.getInt("mq_port", 1883);
-    }
-
-    public static String getMqUsername(Context context) {
-        SharedPreferences pref = context.getSharedPreferences("id.flutter.background_service", MODE_PRIVATE);
-        return pref.getString("mq_username", "");
-    }
-
-    public static String getMqPassword(Context context) {
-        SharedPreferences pref = context.getSharedPreferences("id.flutter.background_service", MODE_PRIVATE);
-        return pref.getString("mq_password", "");
-    }
-
-    public static Long getInterval(Context context) {
-        SharedPreferences pref = context.getSharedPreferences("id.flutter.background_service", MODE_PRIVATE);
-        return pref.getLong("loc_interval", 0);
-    }
-
-    public static Long getFastestInterval(Context context) {
-        SharedPreferences pref = context.getSharedPreferences("id.flutter.background_service", MODE_PRIVATE);
-        return pref.getLong("loc_fastestInterval", 0);
-    }
-
-    public static int getLocationPriority(Context context) {
-        SharedPreferences pref = context.getSharedPreferences("id.flutter.background_service", MODE_PRIVATE);
-        return pref.getInt("loc_priority", 0);
-    }
-
-    public static String getDriverId(Context context) {
-        SharedPreferences pref = context.getSharedPreferences("id.flutter.background_service", MODE_PRIVATE);
-        return pref.getString("driver_id", "0");
-    }
-
-    public static String getAppStateValue(Context context) {
-        SharedPreferences pref = context.getSharedPreferences("id.flutter.background_service", MODE_PRIVATE);
-        return pref.getString("app_state_value", "0");
-    }
-
-    public static String getLocUpdateTopicOnline(Context context) {
-        SharedPreferences pref = context.getSharedPreferences("id.flutter.background_service", MODE_PRIVATE);
-        return pref.getString("loc_update_topic_online", "");
-    }
-
-    public static String getLocUpdateTopicOnRide(Context context) {
-        SharedPreferences pref = context.getSharedPreferences("id.flutter.background_service", MODE_PRIVATE);
-        return pref.getString("loc_update_topic_on_ride", "");
-    }
-
-    public static String getLocUpdatePayload(Context context) {
-        SharedPreferences pref = context.getSharedPreferences("id.flutter.background_service", MODE_PRIVATE);
-        return pref.getString("loc_update_payload", "");
-    }
-
-    public static String getApiTokenValue(Context context) {
-        SharedPreferences pref = context.getSharedPreferences("id.flutter.background_service", MODE_PRIVATE);
-        return pref.getString("api_token", "");
-    }
-
-    public static String getLatLngList(Context context) {
-        SharedPreferences pref = context.getSharedPreferences("id.flutter.background_service", MODE_PRIVATE);
-        return pref.getString("ridelatlnglist", "");
-    }
-
-    @Override
-    public IBinder onBind(Intent intent) {
-        return null;
-    }
-
     @Override
     public void onCreate() {
         super.onCreate();
@@ -379,6 +214,8 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
         periodicUpdateIsBgService();
         updateNotificationInfo();
     }
+
+    Timer infiniteTimer;
 
     void periodicUpdateIsBgService() {
 //        infiniteTimer = new Timer();
@@ -418,12 +255,14 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
             if (isDebug) {
                 Log.d(TAG, "Lost location permission.$unlikely");
             }
-        }
+         }
     }
+
+    ObjectMapper objectMapper = new ObjectMapper();
 
     private void onNewLocation(Location location) {
         this.currentLocation = location;
-        if (isTrackLocRemotly) {
+        if(isTrackLocRemotly){
             isTrackLocRemotly = false;
             stopTracking();
 
@@ -564,35 +403,35 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
                     }
                 }
             } else {
-                /*Create handle for the RetrofitInstance interface*/
-                String token = getApiTokenValue(this);
-                if (token != null && token.length() > 10) {
-                    ApiEndpoints apiEndpoints = RetrofitClientInstance.getRetrofitInstance(token).create(ApiEndpoints.class);
-                    if (apiEndpoints != null) {
-                        Call<DriverLocation> call = apiEndpoints.updateDriverLocation(
-                                new DriverLocation(),
-                                location.getLatitude(),
-                                location.getLongitude(),
-                                getDriverId(this));
+                    /*Create handle for the RetrofitInstance interface*/
+                    String token = getApiTokenValue(this);
+                    if (token != null && token.length() > 10) {
+                        ApiEndpoints apiEndpoints = RetrofitClientInstance.getRetrofitInstance(token).create(ApiEndpoints.class);
+                        if (apiEndpoints != null) {
+                            Call<DriverLocation> call = apiEndpoints.updateDriverLocation(
+                                    new DriverLocation(),
+                                    location.getLatitude(),
+                                    location.getLongitude(),
+                                    getDriverId(this));
 
-                        call.enqueue(new Callback<DriverLocation>() {
-                            @Override
-                            public void onResponse(Call<DriverLocation> call, Response<DriverLocation> response) {
-                                if (isDebug)
-                                    Log.d(">>> ApiCall-Success >", response.toString());
-                            }
-
-                            @Override
-                            public void onFailure(Call<DriverLocation> call, Throwable t) {
-                                if (isDebug) {
-                                    Log.d(">>> ApiCall-Failed > ", t.getMessage());
+                            call.enqueue(new Callback<DriverLocation>() {
+                                @Override
+                                public void onResponse(Call<DriverLocation> call, Response<DriverLocation> response) {
+                                    if (isDebug)
+                                        Log.d(">>> ApiCall-Success >", response.toString());
                                 }
 
+                                @Override
+                                public void onFailure(Call<DriverLocation> call, Throwable t) {
+                                    if (isDebug) {
+                                        Log.d(">>> ApiCall-Failed > ", t.getMessage());
+                                    }
 
-                            }
-                        });
+
+                                }
+                            });
+                        }
                     }
-                }
             }
 
         } catch (Exception e) {
@@ -766,6 +605,8 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
         }
     }
 
+    // Location >>>>>
+
     private void localBroadcastManager(JSONObject broadcastData, String tag, String logString) {
         LocalBroadcastManager manager = LocalBroadcastManager.getInstance(this);
         Intent intent = new Intent("id.flutter/background_service");
@@ -930,6 +771,9 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
         }
     }
 
+    AtomicBoolean isRunning = new AtomicBoolean(false);
+
+
     private void runService() {
         try {
             if (isDebug) {
@@ -974,6 +818,7 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
             }
         }
     }
+
 
     private void initializeConnection() {
         if (hive_client == null) {
@@ -1087,6 +932,11 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
         }
     }
 
+    Timer bookingCounterTimer = null;
+    static final int PASS_TIMEOUT = 30;
+    static int timerCurrentTick = PASS_TIMEOUT;
+    static boolean isBookingTimerCancelled = false;
+
     private void startBookingStartProcess(String payload) {
         messageOnNewTrip = payload;
         try {
@@ -1120,10 +970,10 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
                         e.printStackTrace();
                     }
                     if (timerCurrentTick <= 0 && !isBookingTimerCancelled) {
-                        resetBookingCounterTimer();
+                        cancelBookingTimer();
 
-                        // TODO call auto pass
-//                        autoPassTheBooking();
+                        // call auto pass
+                        autoPassTheBooking();
                     }
                 }
             }, 1000, 1000);
@@ -1190,10 +1040,7 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
                         Random rand = new Random();
                         String otp = String.format("%04d", rand.nextInt(10000));
                         messageOnNewTrip = messageOnNewTrip.replaceAll("=OTP=", otp);
-
-                        //TODO check this conditon
-//                        String passpay = getPassBookingPayload(driverId, messageOnNewTrip, otp);
-                        String passpay = "RQAP";
+                        String passpay = getPassBookingPayload(driverId, messageOnNewTrip, otp);
 
                         if (tpType.equals("4") || tpType.equals("5")) {
                             // This is for portal
@@ -1229,7 +1076,7 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
                             }
                         } else {
                             //sending to customer mobile app
-                           // publishMessage(Constants.MQ_ENV_PREFIX + "/" + "rd/rq/ak/" + rideReferenceNo, passpay);
+                            publishMessage(Constants.MQ_ENV_PREFIX + "/" + "rd/rq/ak/" + rideReferenceNo, passpay);
                         }
                     }
 
@@ -1252,9 +1099,9 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
         hive_client.publishes(MqttGlobalPublishFilter.ALL,
                 mqtt3Publish -> {
                     try {
-                        if (isDebug) {
-                            Log.d(">>> BGS >>> ", mqtt3Publish.toString());
-                        }
+                     if (isDebug) {
+                         Log.d(">>> BGS >>> ", mqtt3Publish.toString());
+                     }
 
                         String topic = mqtt3Publish.getTopic().toString();
                         String payload = new String(mqtt3Publish.getPayloadAsBytes());
@@ -1266,19 +1113,13 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
                         Log.d("in coming_topic", topic);
 
                         if (topic.contains(Constants.MQ_ENV_PREFIX + "/dr/rd/rq/")) {
-                            String[] rideDetails = payload.split("\\|");
+                            String[] rideDetails = payload.split("|");
 
-                            new Runnable() {
-                                @Override
-                                public void run() {
-                                    showNotification(NotificationType.BOOKING_REQUEST, topic, payload);
-                                }
-                            }.run();
-
-
+                            if (showNotificationBackground) {
+                                showNotification(NotificationType.BOOKING_REQUEST, topic, payload);
+                            }
                             String cmd = rideDetails[0].toString().toUpperCase();
-//                            if (cmd.equals("RDRQ")) {
-                            if (cmd.equals("RDDA")) {
+                            if(cmd.equals("RDRQ")){
                                 rideReferenceNo = rideDetails[2];
 
                                 subscribeTopic(Constants.MQ_ENV_PREFIX + "/dr/rd/rr/" + rideReferenceNo);
@@ -1287,22 +1128,21 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
                                 startBookingStartProcess(payload);
                             }
 
-
-
-                        } else if (topic.startsWith(Constants.MQ_ENV_PREFIX + "/dr/rd/rr/")) {
-                            String[] rideDetails = payload.split("\\|");
+                        }
+                            else if (topic.startsWith(Constants.MQ_ENV_PREFIX + "/dr/rd/rr/")) {
+                            String[] rideDetails = payload.split("|");
 
                             // check in payload its a payment done or not
                             String cmd = rideDetails[0].toString().toUpperCase();
 
                             if (cmd.equals("RQAA")) {
                                 //TODO
-                            } else if (cmd.equals("RDST")) {
+                            }else if (cmd.equals("RDST")) {
                                 //TODO
                             } else if (cmd.equals("RDCT")) {
                                 String driverId = getDriverId(this);
                                 subscribeTopic(Constants.MQ_ENV_PREFIX + "/dr/rd/rq/" + driverId);
-                            } else if (cmd.equals("RDCL")) {
+                            }else if (cmd.equals("RDCL")) {
                                 showNotification(NotificationType.BOOKING_CANCELLED, topic, payload);
                                 String driverId = getDriverId(this);
                                 subscribeTopic(Constants.MQ_ENV_PREFIX + "/dr/rd/rq/" + driverId);
@@ -1315,13 +1155,15 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
                             String driverId = getDriverId(this);
                             String[] vals = payload.split("=");
                             publishMessage(Constants.MQ_ENV_PREFIX + "/rd/handshake/ack/" + vals[0], driverId + "|");
-                        } else if (topic.startsWith(Constants.MQ_ENV_PREFIX + "/drivers/location/req/")) {
+                        }
+                        else if (topic.startsWith(Constants.MQ_ENV_PREFIX + "/drivers/location/req/")) {
                             // check in payload its a payment done or not
                             isTrackLocRemotly = true;
-                            ContextCompat.getMainExecutor(this).execute(() -> {
+                            ContextCompat.getMainExecutor(this).execute(()  -> {
                                 startTracking();
                             });
-                        } else if (topic.startsWith(Constants.MQ_ENV_PREFIX + "/notifydriver")) {
+                        }
+                        else if (topic.startsWith(Constants.MQ_ENV_PREFIX + "/notifydriver")) {
                             JSONObject mqData_ = new JSONObject();
                             mqData_.put("responseData", "on_screen_notification");
                             localBroadcastManager(mqData_, ">>> In-App_Notification > ", "in_app_Notification");
@@ -1368,23 +1210,22 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
     void publishMessage(String topicName, String message) {
         String top = topicName.replaceAll("=", "/");
         try {
-            if (top.startsWith(Constants.MQ_ENV_PREFIX + "/" + "cr/rd/rr")) {
-                String[] parts = message.split("\\|");
+             if (top.startsWith(Constants.MQ_ENV_PREFIX + "/" + "cr/rd/rr")) {
+                String[] parts = message.split("|");
                 String cmd = parts[0].toString().toUpperCase();
-
                 if (cmd.equals("RDCT")) {
                     stopTracking();
                     String emptyListStr = "[]"; // new String(data)
                     setLatLngList(this, emptyListStr);
-                } else if (cmd.equals("RDST")) {
+                }else if(cmd.equals("RDST")){
                     startTracking();
-                } else if (cmd.equals("RQAA")) {
-                    resetBookingCounterTimer();
-                } else if (cmd.equals("RQAP")) {
-                    resetBookingCounterTimer();
+                }else if (cmd.equals("RQAA")) {
+                     resetBookingCounterTimer();
+                 } else if (cmd.equals("RQAP")) {
+                     resetBookingCounterTimer();
 //                     String dId = getDriverId(this);
 //                     subscribeTopic(Constants.MQ_ENV_PREFIX + "/" + "rd/rq/" + dId);
-                }
+                 }
             }
         } catch (Exception e) {
             e.printStackTrace();
@@ -1567,6 +1408,39 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
         result.notImplemented();
     }
 
+    @RequiresApi(api = Build.VERSION_CODES.LOLLIPOP)
+    private ConnectivityManager.NetworkCallback networkCallback = new ConnectivityManager.NetworkCallback() {
+        @Override
+        public void onAvailable(@NonNull Network network) {
+            super.onAvailable(network);
+            connectMqtt();
+            if (isDebug) {
+                Log.d(">>>> BGS conection >>>", "onAvailable(network)");
+            }
+        }
+
+        @Override
+        public void onLost(@NonNull Network network) {
+            super.onLost(network);
+            if (isDebug) {
+                Log.d(">>>> BGS conection >>>", ".onLost(network)");
+            }
+        }
+
+        @Override
+        public void onCapabilitiesChanged(@NonNull Network network, @NonNull NetworkCapabilities networkCapabilities) {
+            super.onCapabilitiesChanged(network, networkCapabilities);
+            boolean hasCellular = networkCapabilities.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR);
+            boolean hasWifi = networkCapabilities.hasTransport(NetworkCapabilities.TRANSPORT_WIFI);
+        }
+    };
+
+    enum NotificationType {
+        BOOKING_REQUEST,
+        BOOKING_CANCELLED,
+        PAYMENT_DONE
+    }
+
     protected void showNotification(NotificationType notificationType, String topic, String payload) {
         if (isForegroundService(this)) {
 
@@ -1578,31 +1452,35 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
 
             if (notificationType == NotificationType.BOOKING_REQUEST) {
 
-                if (showNotificationBackground) {
-                    RemoteViews mRemoteViews = new RemoteViews(getPackageName(), R.layout.notification_layout);
-                    NotificationCompat.Builder builder = new NotificationCompat.Builder(this, "FOREGROUND_DEFAULT_BOOKING")
-                            .setSmallIcon(R.mipmap.ic_launcher)
-                            .setContentTitle("Booking Request")
-                            .setContentText("You have new booking Request")
-                            .setCustomHeadsUpContentView(mRemoteViews)
-                            .setPriority(NotificationCompat.PRIORITY_HIGH)
-                            .setTimeoutAfter(30000)
-                            .setAutoCancel(true)
-                            .setDefaults(NotificationCompat.DEFAULT_ALL)
-                            .setLargeIcon(BitmapFactory.decodeResource(this.getResources(), R.mipmap.ic_launcher))
-//                      .addAction(R.drawable.ic_accept, getString(R.string.openapp), pi)
-                            .setFullScreenIntent(pi, true);
+                 RemoteViews mRemoteViews = new RemoteViews(getPackageName(), R.layout.notification_layout);;
+
+                NotificationCompat.Builder builder = new NotificationCompat.Builder(this, "FOREGROUND_DEFAULT_BOOKING")
+                        .setSmallIcon(R.mipmap.ic_launcher)
+
+                        .setContentTitle("Booking Request")
+                        .setContentText("You have new booking Request")
+                        .setCustomHeadsUpContentView(mRemoteViews)
+                        .setPriority(NotificationCompat.PRIORITY_HIGH)
+                        .setTimeoutAfter(30000)
+                        .setAutoCancel(true)
+                        .setDefaults(NotificationCompat.DEFAULT_ALL)
+                        .setLargeIcon(BitmapFactory.decodeResource(this.getResources(), R.mipmap.ic_launcher))
+//                        .addAction(R.drawable.ic_accept, getString(R.string.openapp), pi)
+                        .setFullScreenIntent(pi, true);
 //                      .addAction(R.drawable.ic_pass, getString(R.string.pass), pi);
 //                      .setFullScreenIntent(pi, true);
-                    buildChannel();
-                    bookingnotificationManager.notify(101, builder.build());
-                    // startForeground(99778, builder.build());
-                }
+
+                buildChannel();
+
+                bookingnotificationManager.notify(101, builder.build());
+
+//                  startForeground(99778, builder.build());
 
 
                 finalMediaPlayer = MediaPlayer.create(this, R.raw.booking);
                 try {
                     if (finalMediaPlayer != null) {
+                        //check if it's been already initialized.
                         finalMediaPlayer.start();
                         finalMediaPlayer.setOnCompletionListener(mp -> {
                             updateNotificationInfo();
@@ -1618,18 +1496,18 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
                 } catch (Exception e) {
                     stopBookingSound();
                     updateNotificationInfo();
+
                 }
-//                try {
-//
-////                    final ByteArrayOutputStream out = new ByteArrayOutputStream();
-////                    objectMapper.writeValue(out, new ArrayList<>());
-////                    final byte[] data = out.toByteArray();
-//
-//                    String emptyListStr = "[]"; // new String(data)
-//                    setLatLngList(this, emptyListStr);
-//                } catch (Exception e) {
-//                    e.printStackTrace();
-//                }
+                try {
+//                    final ByteArrayOutputStream out = new ByteArrayOutputStream();
+//                    objectMapper.writeValue(out, new ArrayList<>());
+//                    final byte[] data = out.toByteArray();
+                    String emptyListStr = "[]"; // new String(data)
+                    setLatLngList(this, emptyListStr);
+                } catch (Exception e) {
+                    e.printStackTrace();
+
+                }
             } else if (notificationType == NotificationType.BOOKING_CANCELLED) {
                 NotificationCompat.Builder builder = new NotificationCompat.Builder(this, "FOREGROUND_DEFAULT")
                         .setSmallIcon(R.mipmap.ic_launcher)
@@ -1668,7 +1546,32 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
         }
     }
 
-    public void logEvent(String title, String data) {
+    enum LogType {
+        INFO,
+        WARNING,
+        DEBUG,
+        EXCEPTION,
+        ERROR
+    }
+
+    enum LogTag {
+        SERVICE_STARTED,
+        SERVICE_RUNNING,
+        SERVICE_ENDED,
+        MQ_CONNECTED,
+        MQ_DISCONNECTED,
+        MQ_CONNECT_TRY,
+        NETWORK_CONNECTED,
+        NETWORK_DISCONNECTED,
+        MQ_MSG_RECEIVED,
+        MQ_MSG_PUBLISHED,
+        MQ_MSG_TO_FLUTTER_APP,
+        REST_API_CALL,
+        LOCATION_FETCH
+    }
+
+
+    public void logEvent(String title, String data){
         //App Event Log
         String className = new Throwable()
                 .getStackTrace()[0]
@@ -1788,9 +1691,19 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
         pref.edit().putBoolean("auto_start_on_boot", value).apply();
     }
 
+    public static boolean isAutoStartOnBootMode(Context context) {
+        SharedPreferences pref = context.getSharedPreferences("id.flutter.background_service", MODE_PRIVATE);
+        return pref.getBoolean("auto_start_on_boot", true);
+    }
+
     public void setForegroundServiceMode(boolean value) {
         SharedPreferences pref = getSharedPreferences("id.flutter.background_service", MODE_PRIVATE);
         pref.edit().putBoolean("is_foreground", value).apply();
+    }
+
+    public static boolean isForegroundService(Context context) {
+        SharedPreferences pref = context.getSharedPreferences("id.flutter.background_service", MODE_PRIVATE);
+        return pref.getBoolean("is_foreground", true);
     }
 
     public void setIsServiceStart(boolean value) {
@@ -1798,9 +1711,19 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
         pref.edit().putBoolean("is_service_start", value).apply();
     }
 
+    public static boolean isServiceStart(Context context) {
+        SharedPreferences pref = context.getSharedPreferences("id.flutter.background_service", MODE_PRIVATE);
+        return pref.getBoolean("is_service_start", true);
+    }
+
     public void setManuallyStopped(boolean value) {
         SharedPreferences pref = getSharedPreferences("id.flutter.background_service", MODE_PRIVATE);
         pref.edit().putBoolean("is_manually_stopped", value).apply();
+    }
+
+    public static boolean isManuallyStopped(Context context) {
+        SharedPreferences pref = context.getSharedPreferences("id.flutter.background_service", MODE_PRIVATE);
+        return pref.getBoolean("is_manually_stopped", false);
     }
 
     public void setMqServerCredentials(String host, String username, String password) {
@@ -1818,9 +1741,54 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
         pref.edit().putString("mq_password", password).apply();
     }
 
+    public static String getMqServerHost(Context context) {
+        SharedPreferences pref = context.getSharedPreferences("id.flutter.background_service", MODE_PRIVATE);
+        return pref.getString("mq_server_host", "");
+    }
+
+    public static String getMqClientId(Context context) {
+        SharedPreferences pref = context.getSharedPreferences("id.flutter.background_service", MODE_PRIVATE);
+        return pref.getString("mq_client_id", "");
+    }
+
+    public static int getMqPort(Context context) {
+        SharedPreferences pref = context.getSharedPreferences("id.flutter.background_service", MODE_PRIVATE);
+        return pref.getInt("mq_port", 1883);
+    }
+
+    public static String getMqUsername(Context context) {
+        SharedPreferences pref = context.getSharedPreferences("id.flutter.background_service", MODE_PRIVATE);
+        return pref.getString("mq_username", "");
+    }
+
+    public static String getMqPassword(Context context) {
+        SharedPreferences pref = context.getSharedPreferences("id.flutter.background_service", MODE_PRIVATE);
+        return pref.getString("mq_password", "");
+    }
+
+    public static Long getInterval(Context context) {
+        SharedPreferences pref = context.getSharedPreferences("id.flutter.background_service", MODE_PRIVATE);
+        return pref.getLong("loc_interval", 0);
+    }
+
+    public static Long getFastestInterval(Context context) {
+        SharedPreferences pref = context.getSharedPreferences("id.flutter.background_service", MODE_PRIVATE);
+        return pref.getLong("loc_fastestInterval", 0);
+    }
+
+    public static int getLocationPriority(Context context) {
+        SharedPreferences pref = context.getSharedPreferences("id.flutter.background_service", MODE_PRIVATE);
+        return pref.getInt("loc_priority", 0);
+    }
+
     public void setDriverId(String driverId) {
         SharedPreferences pref = getSharedPreferences("id.flutter.background_service", MODE_PRIVATE);
         pref.edit().putString("driver_id", driverId).apply();
+    }
+
+    public static String getDriverId(Context context) {
+        SharedPreferences pref = context.getSharedPreferences("id.flutter.background_service", MODE_PRIVATE);
+        return pref.getString("driver_id", "0");
     }
 
     public void setAppStateValueAndTopics(String appStateValue, String locUpdateTopicOnline,
@@ -1832,14 +1800,44 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
         pref.edit().putString("loc_update_payload", locUpdatePayload).apply();
     }
 
+    public static String getAppStateValue(Context context) {
+        SharedPreferences pref = context.getSharedPreferences("id.flutter.background_service", MODE_PRIVATE);
+        return pref.getString("app_state_value", "0");
+    }
+
+    public static String getLocUpdateTopicOnline(Context context) {
+        SharedPreferences pref = context.getSharedPreferences("id.flutter.background_service", MODE_PRIVATE);
+        return pref.getString("loc_update_topic_online", "");
+    }
+
+    public static String getLocUpdateTopicOnRide(Context context) {
+        SharedPreferences pref = context.getSharedPreferences("id.flutter.background_service", MODE_PRIVATE);
+        return pref.getString("loc_update_topic_on_ride", "");
+    }
+
+    public static String getLocUpdatePayload(Context context) {
+        SharedPreferences pref = context.getSharedPreferences("id.flutter.background_service", MODE_PRIVATE);
+        return pref.getString("loc_update_payload", "");
+    }
+
     public void setApiTokenValue(String token) {
         SharedPreferences pref = getSharedPreferences("id.flutter.background_service", MODE_PRIVATE);
         pref.edit().putString("api_token", token).apply();
     }
 
+    public static String getApiTokenValue(Context context) {
+        SharedPreferences pref = context.getSharedPreferences("id.flutter.background_service", MODE_PRIVATE);
+        return pref.getString("api_token", "");
+    }
+
     public void setLatLngList(Context context, String latLngList) {
         SharedPreferences pref = context.getSharedPreferences("id.flutter.background_service", MODE_PRIVATE);
         pref.edit().putString("ridelatlnglist", latLngList).apply();
+    }
+
+    public static String getLatLngList(Context context) {
+        SharedPreferences pref = context.getSharedPreferences("id.flutter.background_service", MODE_PRIVATE);
+        return pref.getString("ridelatlnglist", "");
     }
 
     private void buildChannel() {
@@ -1857,36 +1855,48 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
         }
     }
 
-    enum NotificationType {
-        BOOKING_REQUEST,
-        BOOKING_CANCELLED,
-        PAYMENT_DONE
-    }
 
-    enum LogType {
-        INFO,
-        WARNING,
-        DEBUG,
-        EXCEPTION,
-        ERROR
-    }
+    private final Application.ActivityLifecycleCallbacks activityLifecycleCallbacks = new Application.ActivityLifecycleCallbacks() {
 
 
-    enum LogTag {
-        SERVICE_STARTED,
-        SERVICE_RUNNING,
-        SERVICE_ENDED,
-        MQ_CONNECTED,
-        MQ_DISCONNECTED,
-        MQ_CONNECT_TRY,
-        NETWORK_CONNECTED,
-        NETWORK_DISCONNECTED,
-        MQ_MSG_RECEIVED,
-        MQ_MSG_PUBLISHED,
-        MQ_MSG_TO_FLUTTER_APP,
-        REST_API_CALL,
-        LOCATION_FETCH
-    }
+        @Override
+        public void onActivityCreated(@NonNull Activity activity, @Nullable Bundle savedInstanceState) {
+
+        }
+
+        @Override
+        public void onActivityStarted(@NonNull Activity activity) {
+
+        }
+
+        @Override
+        public void onActivityResumed(Activity activity) {
+            showNotificationBackground = false;
+        }
+
+        @Override
+        public void onActivityPaused(Activity activity) {
+            showNotificationBackground = true;
+        }
+
+
+        @Override
+        public void onActivityStopped(@NonNull Activity activity) {
+
+        }
+
+        @Override
+        public void onActivitySaveInstanceState(@NonNull Activity activity, @NonNull Bundle outState) {
+
+        }
+
+        @Override
+        public void onActivityDestroyed(@NonNull Activity activity) {
+
+        }
+
+        // Other lifecycle callback methods...
+    };
 
 //    private static final String ACTION_BUTTON_CLICK = "actionButtonClick";
 //    private static final String ACTION_BUTTON_CLICKED = "com.yourpackage.ACTION_BUTTON_CLICKED"; // Unique action string
