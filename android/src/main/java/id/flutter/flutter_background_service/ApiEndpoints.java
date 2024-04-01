@@ -22,6 +22,6 @@ public interface ApiEndpoints {
     @PUT("dapi/drivers/rides/reject")
     Call<DriverLocation> passRideRequest(@Body PassRideRequest passRideRequest);
 
-    @POST("dapi/appeventlogs")
-    Call<AppEventLog> addAppEventLog(@Body AppEventLog appEventLog);
+//    @POST("dapi/appeventlogs")
+//    Call<AppEventLog> addAppEventLog(@Body AppEventLog appEventLog);
 }

@@ -255,14 +255,14 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
             if (isDebug) {
                 Log.d(TAG, "Lost location permission.$unlikely");
             }
-         }
+        }
     }
 
     ObjectMapper objectMapper = new ObjectMapper();
 
     private void onNewLocation(Location location) {
         this.currentLocation = location;
-        if(isTrackLocRemotly){
+        if (isTrackLocRemotly) {
             isTrackLocRemotly = false;
             stopTracking();
 
@@ -403,35 +403,35 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
                     }
                 }
             } else {
-                    /*Create handle for the RetrofitInstance interface*/
-                    String token = getApiTokenValue(this);
-                    if (token != null && token.length() > 10) {
-                        ApiEndpoints apiEndpoints = RetrofitClientInstance.getRetrofitInstance(token).create(ApiEndpoints.class);
-                        if (apiEndpoints != null) {
-                            Call<DriverLocation> call = apiEndpoints.updateDriverLocation(
-                                    new DriverLocation(),
-                                    location.getLatitude(),
-                                    location.getLongitude(),
-                                    getDriverId(this));
+                /*Create handle for the RetrofitInstance interface*/
+                String token = getApiTokenValue(this);
+                if (token != null && token.length() > 10) {
+                    ApiEndpoints apiEndpoints = RetrofitClientInstance.getRetrofitInstance(token).create(ApiEndpoints.class);
+                    if (apiEndpoints != null) {
+                        Call<DriverLocation> call = apiEndpoints.updateDriverLocation(
+                                new DriverLocation(),
+                                location.getLatitude(),
+                                location.getLongitude(),
+                                getDriverId(this));
 
-                            call.enqueue(new Callback<DriverLocation>() {
-                                @Override
-                                public void onResponse(Call<DriverLocation> call, Response<DriverLocation> response) {
-                                    if (isDebug)
-                                        Log.d(">>> ApiCall-Success >", response.toString());
+                        call.enqueue(new Callback<DriverLocation>() {
+                            @Override
+                            public void onResponse(Call<DriverLocation> call, Response<DriverLocation> response) {
+                                if (isDebug)
+                                    Log.d(">>> ApiCall-Success >", response.toString());
+                            }
+
+                            @Override
+                            public void onFailure(Call<DriverLocation> call, Throwable t) {
+                                if (isDebug) {
+                                    Log.d(">>> ApiCall-Failed > ", t.getMessage());
                                 }
 
-                                @Override
-                                public void onFailure(Call<DriverLocation> call, Throwable t) {
-                                    if (isDebug) {
-                                        Log.d(">>> ApiCall-Failed > ", t.getMessage());
-                                    }
 
-
-                                }
-                            });
-                        }
+                            }
+                        });
                     }
+                }
             }
 
         } catch (Exception e) {
@@ -540,7 +540,7 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
             Log.d(TAG, "Requesting location updates");
         }
         try {
-            fusedLocationProviderClient.requestLocationUpdates(locationRequest, locationCallback, Looper.myLooper());
+            fusedLocationProviderClient.requestLocationUpdates(locationRequest, locationCallback, Looper.getMainLooper());
         } catch (SecurityException e) {
 //            if (lockStatic.isHeld() == true) {
 //                lockStatic.release();
@@ -552,7 +552,7 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
         }
     }
 
-    private void getCurrentLocation() {
+    private void getCurrentLocation(boolean isLocationReturn, String rideRefNo, String cmd) {
         if (isDebug) {
             Log.d(TAG, ">>> Requesting current location");
         }
@@ -571,6 +571,15 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
             }).addOnSuccessListener(location -> {
                 if (location != null) {
                     this.currentLocation = location;
+
+                    if (isLocationReturn) {
+                        String passpay = cmd + "#" + rideReferenceNo + "#" + this.currentLocation.getLatitude() + "," + this.currentLocation.getLongitude()
+                                + "#" + this.currentLocation.getAccuracy()
+                                + "#" + this.currentLocation.getAltitude()
+                                + "#" + this.currentLocation.getBearing()
+                                + "#" + this.currentLocation.getSpeed();
+                        publishMessage(Constants.MQ_ENV_PREFIX + "/" + "dr/lc/ak/" + rideRefNo, passpay);
+                    }
 
                     JSONObject currentLocation = new JSONObject();
                     try {
@@ -659,11 +668,11 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
         } catch (Exception e) {
             e.printStackTrace();
         }
-        try {
-            updateBgServiceStatus(false, isManuallyStopped);
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
+//        try {
+//            updateBgServiceStatus(false, isManuallyStopped);
+//        } catch (Exception e) {
+//            e.printStackTrace();
+//        }
     }
 
     private void createNotificationChannel() {
@@ -746,11 +755,11 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
 
 //      monitorNetwork();
 
-        try {
-            updateBgServiceStatus(true, false);
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
+//        try {
+//            updateBgServiceStatus(true, false);
+//        } catch (Exception e) {
+//            e.printStackTrace();
+//        }
 
         return START_STICKY;
     }
@@ -896,7 +905,7 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
                     localBroadcastManager(mqData, ">>> BGS onMqttConnected", "sent onMqttConnected is connected");
                     String driverId = getDriverId(this);
                     if (driverId != null && driverId.length() > 0) {
-
+                        subscribeTopic(Constants.MQ_ENV_PREFIX + "/dr/lc/" + driverId);
                         subscribeTopic(Constants.MQ_ENV_PREFIX + "/rd/handshake/" + driverId);
                         subscribeTopic(Constants.MQ_ENV_PREFIX + "/notifydriver/" + driverId);
 
@@ -939,22 +948,22 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
 
     private void startBookingStartProcess(String payload) {
         messageOnNewTrip = payload;
-        try {
-            String[] parts = payload.split("#");
-            String[] valuesPart1 = parts[1].split("\\|");
-            String[] valuesPart3 = parts[3].split("\\|");
-            // Trip Type coming from Customer Request
-            rideReferenceNo = valuesPart3[0];
-            tripType = parts[5];
-            customerId = valuesPart1[0];
-            tpType = valuesPart3[1];
-        } catch (Exception e) {
-            e.printStackTrace();
-
-        }
+//        try {
+//            String[] parts = payload.split("#");
+//            String[] valuesPart1 = parts[1].split("\\|");
+//            String[] valuesPart3 = parts[3].split("\\|");
+//            // Trip Type coming from Customer Request
+//            rideReferenceNo = valuesPart3[0];
+//            tripType = parts[5];
+//            customerId = valuesPart1[0];
+//            tpType = valuesPart3[1];
+//        } catch (Exception e) {
+//            e.printStackTrace();
+//
+//        }
 
         if (bookingCounterTimer == null) {
-            bookingCounterTimer = new Timer();
+            bookingCounterTimer = new Timer() ;
             isBookingTimerCancelled = false;
             timerCurrentTick = PASS_TIMEOUT; // 30 sec
             bookingCounterTimer.schedule(new TimerTask() {
@@ -973,7 +982,7 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
                         cancelBookingTimer();
 
                         // call auto pass
-                        autoPassTheBooking();
+//                        autoPassTheBooking();
                     }
                 }
             }, 1000, 1000);
@@ -1099,9 +1108,9 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
         hive_client.publishes(MqttGlobalPublishFilter.ALL,
                 mqtt3Publish -> {
                     try {
-                     if (isDebug) {
-                         Log.d(">>> BGS >>> ", mqtt3Publish.toString());
-                     }
+                        if (isDebug) {
+                            Log.d(">>> BGS >>> ", mqtt3Publish.toString());
+                        }
 
                         String topic = mqtt3Publish.getTopic().toString();
                         String payload = new String(mqtt3Publish.getPayloadAsBytes());
@@ -1113,36 +1122,41 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
                         Log.d("in coming_topic", topic);
 
                         if (topic.contains(Constants.MQ_ENV_PREFIX + "/dr/rd/rq/")) {
-                            String[] rideDetails = payload.split("|");
+                            String[] rideDetails = payload.split("#");
 
-                            if (showNotificationBackground) {
-                                showNotification(NotificationType.BOOKING_REQUEST, topic, payload);
-                            }
                             String cmd = rideDetails[0].toString().toUpperCase();
-                            if(cmd.equals("RDRQ")){
+                            if (cmd.equals("RDRQ")) {
                                 rideReferenceNo = rideDetails[2];
-
                                 subscribeTopic(Constants.MQ_ENV_PREFIX + "/dr/rd/rr/" + rideReferenceNo);
-
+                            } if(cmd.equals("RDDA")){
+//                                if (showNotificationBackground) {
+                                subscribeTopic(Constants.MQ_ENV_PREFIX + "/dr/rd/rr/" + rideReferenceNo);
+                                showNotification(NotificationType.BOOKING_REQUEST, topic, payload);
                                 // booking ---
+                                rideReferenceNo = rideDetails[2];
+                                messageOnNewTrip = payload;
                                 startBookingStartProcess(payload);
+//                                }
                             }
 
-                        }
-                            else if (topic.startsWith(Constants.MQ_ENV_PREFIX + "/dr/rd/rr/")) {
-                            String[] rideDetails = payload.split("|");
+                        } else if (topic.startsWith(Constants.MQ_ENV_PREFIX + "/dr/rd/rr/")) {
+                            String[] rideDetails = payload.split("#");
 
                             // check in payload its a payment done or not
                             String cmd = rideDetails[0].toString().toUpperCase();
 
                             if (cmd.equals("RQAA")) {
-                                //TODO
-                            }else if (cmd.equals("RDST")) {
-                                //TODO
+                                resetBookingCounterTimer();
+                            } else if (cmd.equals("RDST")) {
+                                startTracking();
                             } else if (cmd.equals("RDCT")) {
                                 String driverId = getDriverId(this);
                                 subscribeTopic(Constants.MQ_ENV_PREFIX + "/dr/rd/rq/" + driverId);
-                            }else if (cmd.equals("RDCL")) {
+
+                                stopTracking();
+                                String emptyListStr = "[]"; // new String(data)
+                                setLatLngList(this, emptyListStr);
+                            } else if (cmd.equals("RDCL")) {
                                 showNotification(NotificationType.BOOKING_CANCELLED, topic, payload);
                                 String driverId = getDriverId(this);
                                 subscribeTopic(Constants.MQ_ENV_PREFIX + "/dr/rd/rq/" + driverId);
@@ -1155,15 +1169,35 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
                             String driverId = getDriverId(this);
                             String[] vals = payload.split("=");
                             publishMessage(Constants.MQ_ENV_PREFIX + "/rd/handshake/ack/" + vals[0], driverId + "|");
-                        }
-                        else if (topic.startsWith(Constants.MQ_ENV_PREFIX + "/drivers/location/req/")) {
-                            // check in payload its a payment done or not
+                        } else if (topic.startsWith(Constants.MQ_ENV_PREFIX + "/dr/lc/")) {
+                            String[] rideDetails = payload.split("#");
+                            String cmd = rideDetails[0].toString().toUpperCase();
+                            if (cmd.equals("DRRL")) {
+                                String rideReferenceNo = rideDetails[2];
+                                getCurrentLocation(true, rideReferenceNo, cmd);
+                            } else if (cmd.equals("DRLL")) {
+                                String rideReferenceNo = rideDetails[2];
+                                String passpay = cmd + "#" + rideReferenceNo + "#" + this.currentLocation.getLatitude() + "," + this.currentLocation.getLongitude()
+                                        + "#" + this.currentLocation.getAccuracy()
+                                        + "#" + this.currentLocation.getAltitude()
+                                        + "#" + this.currentLocation.getBearing()
+                                        + "#" + this.currentLocation.getSpeed();
+                                publishMessage(Constants.MQ_ENV_PREFIX + "/" + "dr/lc/ak/" + rideReferenceNo, passpay);
+                            } else {
+                                String rideReferenceNo = rideDetails[2];
+                                String passpay = cmd + "#" + rideReferenceNo + "#" + this.currentLocation.getLatitude() + "," + this.currentLocation.getLongitude()
+                                        + "#" + this.currentLocation.getAccuracy()
+                                        + "#" + this.currentLocation.getAltitude()
+                                        + "#" + this.currentLocation.getBearing()
+                                        + "#" + this.currentLocation.getSpeed();
+                                publishMessage(Constants.MQ_ENV_PREFIX + "/" + "dr/lc/ak/" + rideReferenceNo, passpay);
+                            }
+                        } else if (topic.startsWith(Constants.MQ_ENV_PREFIX + "/drivers/location/req/")) {
                             isTrackLocRemotly = true;
-                            ContextCompat.getMainExecutor(this).execute(()  -> {
+                            ContextCompat.getMainExecutor(this).execute(() -> {
                                 startTracking();
                             });
-                        }
-                        else if (topic.startsWith(Constants.MQ_ENV_PREFIX + "/notifydriver")) {
+                        } else if (topic.startsWith(Constants.MQ_ENV_PREFIX + "/notifydriver")) {
                             JSONObject mqData_ = new JSONObject();
                             mqData_.put("responseData", "on_screen_notification");
                             localBroadcastManager(mqData_, ">>> In-App_Notification > ", "in_app_Notification");
@@ -1210,30 +1244,31 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
     void publishMessage(String topicName, String message) {
         String top = topicName.replaceAll("=", "/");
         try {
-             if (top.startsWith(Constants.MQ_ENV_PREFIX + "/" + "cr/rd/rr")) {
-                String[] parts = message.split("|");
+            if (top.startsWith(Constants.MQ_ENV_PREFIX + "/" + "cr/rd/rr")) {
+                String[] parts = message.split("#");
                 String cmd = parts[0].toString().toUpperCase();
                 if (cmd.equals("RDCT")) {
                     stopTracking();
                     String emptyListStr = "[]"; // new String(data)
                     setLatLngList(this, emptyListStr);
-                }else if(cmd.equals("RDST")){
+                } else if (cmd.equals("RDST")) {
                     startTracking();
-                }else if (cmd.equals("RQAA")) {
-                     resetBookingCounterTimer();
-                 } else if (cmd.equals("RQAP")) {
-                     resetBookingCounterTimer();
+                } else if (cmd.equals("RQAA")) {
+                    resetBookingCounterTimer();
+                } else if (cmd.equals("RQAP")) {
+                    resetBookingCounterTimer();
 //                     String dId = getDriverId(this);
 //                     subscribeTopic(Constants.MQ_ENV_PREFIX + "/" + "rd/rq/" + dId);
-                 }
+                }
             }
         } catch (Exception e) {
             e.printStackTrace();
 
         }
-
+        Log.d(">>","-------------------------------------------------------");
         Log.d("publish topic >>>>>>>> ", top);
-
+        Log.d("publish Message >>>>>>>> ", message);
+        Log.d(">>","-------------------------------------------------------");
         hive_client.toAsync().publishWith()
                 .topic(top)
                 .payload(message.getBytes())
@@ -1289,7 +1324,7 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
                     }
                     ApiEndpoints apiEndpoints = RetrofitClientInstance.getRetrofitInstance(apiToken).create(ApiEndpoints.class);
                     updateDriverMQStatus();
-                    updateBgServiceStatus(true, false);
+//                    updateBgServiceStatus(true, false);
                 } else if (action.equals("setAppStateValue")) {
                     String appStateValue = data.getString("app_state_value");
                     String locUpdateTopicOnline = data.getString("loc_update_topic_online");
@@ -1297,16 +1332,16 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
                     String locUpdatePayload = data.getString("loc_update_payload");
                     setAppStateValueAndTopics(appStateValue, locUpdateTopicOnline, locUpdateTopicOnRide, locUpdatePayload);
                 } else if (action.equals("getCurrentLocation")) {
-                    getCurrentLocation();
+                    getCurrentLocation(false, "", "");
                 } else if (action.equals("getRideLatLngListValue")) {
                     //TODO
                 } else if (action.equals("stopService")) {
                     isManuallyStopped = true;
-                    try {
-                        updateBgServiceStatus(false, true);
-                    } catch (Exception e) {
-                        e.printStackTrace();
-                    }
+//                    try {
+//                        updateBgServiceStatus(false, true);
+//                    } catch (Exception e) {
+//                        e.printStackTrace();
+//                    }
                 }
             } catch (Exception e) {
                 e.printStackTrace();
@@ -1380,11 +1415,11 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
                 } else {
                     pi = PendingIntent.getBroadcast(getApplicationContext(), 111, intent, PendingIntent.FLAG_CANCEL_CURRENT);
                 }
-                try {
-                    updateBgServiceStatus(false, true);
-                } catch (Exception e) {
-                    e.printStackTrace();
-                }
+//                try {
+//                    updateBgServiceStatus(false, true);
+//                } catch (Exception e) {
+//                    e.printStackTrace();
+//                }
                 result.success(true);
                 return;
             }
@@ -1452,7 +1487,7 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
 
             if (notificationType == NotificationType.BOOKING_REQUEST) {
 
-                 RemoteViews mRemoteViews = new RemoteViews(getPackageName(), R.layout.notification_layout);;
+                RemoteViews mRemoteViews = new RemoteViews(getPackageName(), R.layout.notification_layout);
 
                 NotificationCompat.Builder builder = new NotificationCompat.Builder(this, "FOREGROUND_DEFAULT_BOOKING")
                         .setSmallIcon(R.mipmap.ic_launcher)
@@ -1489,7 +1524,6 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
                                 finalMediaPlayer = null;
                             } catch (Exception e) {
                                 e.printStackTrace();
-
                             }
                         });
                     }
@@ -1508,7 +1542,8 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
                     e.printStackTrace();
 
                 }
-            } else if (notificationType == NotificationType.BOOKING_CANCELLED) {
+            }
+            else if (notificationType == NotificationType.BOOKING_CANCELLED) {
                 NotificationCompat.Builder builder = new NotificationCompat.Builder(this, "FOREGROUND_DEFAULT")
                         .setSmallIcon(R.mipmap.ic_launcher)
                         .setContentTitle("Booking Cancelled")
@@ -1527,7 +1562,8 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
                     e.printStackTrace();
 
                 }
-            } else if (notificationType == NotificationType.PAYMENT_DONE) {
+            }
+            else if (notificationType == NotificationType.PAYMENT_DONE) {
                 NotificationCompat.Builder builder = new NotificationCompat.Builder(this, "FOREGROUND_DEFAULT")
                         .setSmallIcon(R.mipmap.ic_launcher)
                         .setContentTitle("Payment Completed")
@@ -1571,82 +1607,82 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
     }
 
 
-    public void logEvent(String title, String data){
-        //App Event Log
-        String className = new Throwable()
-                .getStackTrace()[0]
-                .getClassName();
-        String methodName = new Throwable()
-                .getStackTrace()[0]
-                .getMethodName();
-        int lineNumber = new Throwable()
-                .getStackTrace()[0]
-                .getLineNumber();
-        addAppEventLog(LogType.DEBUG, LogTag.SERVICE_RUNNING, title, data,
-                className, methodName, lineNumber);
-    }
+//    public void logEvent(String title, String data) {
+//        //App Event Log
+//        String className = new Throwable()
+//                .getStackTrace()[0]
+//                .getClassName();
+//        String methodName = new Throwable()
+//                .getStackTrace()[0]
+//                .getMethodName();
+//        int lineNumber = new Throwable()
+//                .getStackTrace()[0]
+//                .getLineNumber();
+//        addAppEventLog(LogType.DEBUG, LogTag.SERVICE_RUNNING, title, data,
+//                className, methodName, lineNumber);
+//    }
 
-    //new Throwable().getStackTrace()[0].getLineNumber()
-    void addAppEventLog(LogType logType, LogTag logTag,
-                        String title, String data,
-                        String className, String methodName, int lineNo) {
-        try {
-            /*Create handle for the RetrofitInstance interface*/
-            String token = getApiTokenValue(this);
-            if (token != null && token.length() > 10) {
-                AppEventLog appEventLog = new AppEventLog();
-                try {
-                    String userIdStr = getDriverId(this);
-                    appEventLog.user_id = Long.parseLong(userIdStr != null && userIdStr.length() > 0 ?
-                            userIdStr : "0");
-                    appEventLog.class_name = className;
-                    appEventLog.method_name = methodName;
-                    appEventLog.line_no = String.valueOf(lineNo);
-                    appEventLog.log_type = logType.name();
-                    appEventLog.tag = logTag.name();
-                    appEventLog.title = title;
-                    appEventLog.data = data;
-                    appEventLog.is_mq_alive = isMqAlive;
-                    appEventLog.source = "BGService";
-                    appEventLog.app_state = getAppStateValue(this);
-                    ;
-                    appEventLog.token = token;
-                    appEventLog.ride_ref_no = BackgroundService.rideReferenceNo;
-                    SimpleDateFormat formatter = new SimpleDateFormat("yyyy-MM-dd hh:mm:ss");
-                    appEventLog.created_time = formatter.format(new Date());
-                    appEventLog.loc_lat = currentLocation != null ? currentLocation.getLatitude() : 0.0;
-                    appEventLog.loc_lng = currentLocation != null ? currentLocation.getLongitude() : 0.0;
-                } catch (Exception e) {
-                    e.printStackTrace();
-                }
-
-                ApiEndpoints apiEndpoints = RetrofitClientInstance.getRetrofitInstance(token).create(ApiEndpoints.class);
-                if (apiEndpoints != null) {
-                    Call<AppEventLog> call = apiEndpoints.addAppEventLog(appEventLog);
-
-                    call.enqueue(new Callback<AppEventLog>() {
-                        @Override
-                        public void onResponse(Call<AppEventLog> call, Response<AppEventLog> response) {
-                            if (isDebug) {
-                                Log.d(">>> ApiCall-Success >", response.toString());
-                            }
-                        }
-
-                        @Override
-                        public void onFailure(Call<AppEventLog> call, Throwable t) {
-                            if (isDebug) {
-                                Log.d(">>> ApiCall-Failed > ", t.getMessage());
-                            }
-                        }
-                    });
-                }
-            }
-        } catch (Exception e) {
-            e.printStackTrace();
-            //App Event Log
-        }
-    }
-
+//    //new Throwable().getStackTrace()[0].getLineNumber()
+//    void addAppEventLog(LogType logType, LogTag logTag,
+//                        String title, String data,
+//                        String className, String methodName, int lineNo) {
+//        try {
+//            /*Create handle for the RetrofitInstance interface*/
+//            String token = getApiTokenValue(this);
+//            if (token != null && token.length() > 10) {
+//                AppEventLog appEventLog = new AppEventLog();
+//                try {
+//                    String userIdStr = getDriverId(this);
+//                    appEventLog.user_id = Long.parseLong(userIdStr != null && userIdStr.length() > 0 ?
+//                            userIdStr : "0");
+//                    appEventLog.class_name = className;
+//                    appEventLog.method_name = methodName;
+//                    appEventLog.line_no = String.valueOf(lineNo);
+//                    appEventLog.log_type = logType.name();
+//                    appEventLog.tag = logTag.name();
+//                    appEventLog.title = title;
+//                    appEventLog.data = data;
+//                    appEventLog.is_mq_alive = isMqAlive;
+//                    appEventLog.source = "BGService";
+//                    appEventLog.app_state = getAppStateValue(this);
+//                    ;
+//                    appEventLog.token = token;
+//                    appEventLog.ride_ref_no = BackgroundService.rideReferenceNo;
+//                    SimpleDateFormat formatter = new SimpleDateFormat("yyyy-MM-dd hh:mm:ss");
+//                    appEventLog.created_time = formatter.format(new Date());
+//                    appEventLog.loc_lat = currentLocation != null ? currentLocation.getLatitude() : 0.0;
+//                    appEventLog.loc_lng = currentLocation != null ? currentLocation.getLongitude() : 0.0;
+//                } catch (Exception e) {
+//                    e.printStackTrace();
+//                }
+//
+//                ApiEndpoints apiEndpoints = RetrofitClientInstance.getRetrofitInstance(token).create(ApiEndpoints.class);
+//                if (apiEndpoints != null) {
+//                    Call<AppEventLog> call = apiEndpoints.addAppEventLog(appEventLog);
+//
+//                    call.enqueue(new Callback<AppEventLog>() {
+//                        @Override
+//                        public void onResponse(Call<AppEventLog> call, Response<AppEventLog> response) {
+//                            if (isDebug) {
+//                                Log.d(">>> ApiCall-Success >", response.toString());
+//                            }
+//                        }
+//
+//                        @Override
+//                        public void onFailure(Call<AppEventLog> call, Throwable t) {
+//                            if (isDebug) {
+//                                Log.d(">>> ApiCall-Failed > ", t.getMessage());
+//                            }
+//                        }
+//                    });
+//                }
+//            }
+//        } catch (Exception e) {
+//            e.printStackTrace();
+//            //App Event Log
+//        }
+//    }
+//
     private void addTopic(String topic) {
         topicList = getSharedPreferencesTopicList(this);
         if (!topicList.contains(topic)) {
