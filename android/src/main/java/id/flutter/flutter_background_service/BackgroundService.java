@@ -53,10 +53,23 @@ import com.google.android.gms.location.LocationResult;
 import com.google.android.gms.location.LocationServices;
 import com.google.android.gms.tasks.CancellationToken;
 import com.google.android.gms.tasks.OnTokenCanceledListener;
-import com.hivemq.client.mqtt.MqttGlobalPublishFilter;
-import com.hivemq.client.mqtt.datatypes.MqttQos;
-import com.hivemq.client.mqtt.mqtt3.Mqtt3AsyncClient;
-import com.hivemq.client.mqtt.mqtt3.Mqtt3Client;
+
+import org.eclipse.paho.android.service.DatabaseMessageStore;
+import org.eclipse.paho.android.service.MessageStore;
+import org.eclipse.paho.android.service.MqttAndroidClient;
+import org.eclipse.paho.android.service.MqttConnection;
+//import org.eclipse.paho.android.service.MqttService;
+import org.eclipse.paho.android.service.MqttServiceBinder;
+import org.eclipse.paho.android.service.MqttServiceConstants;
+import org.eclipse.paho.android.service.MqttTraceHandler;
+import org.eclipse.paho.android.service.Status;
+import org.eclipse.paho.client.mqttv3.IMqttActionListener;
+import org.eclipse.paho.client.mqttv3.IMqttDeliveryToken;
+import org.eclipse.paho.client.mqttv3.IMqttToken;
+import org.eclipse.paho.client.mqttv3.MqttCallbackExtended;
+import org.eclipse.paho.client.mqttv3.MqttConnectOptions;
+import org.eclipse.paho.client.mqttv3.MqttException;
+import org.eclipse.paho.client.mqttv3.MqttMessage;
 
 import org.json.JSONException;
 import org.json.JSONObject;
@@ -85,24 +98,51 @@ import retrofit2.Call;
 import retrofit2.Callback;
 import retrofit2.Response;
 
-public class BackgroundService extends Service implements MethodChannel.MethodCallHandler {
-    private static final String TAG = "BackgroundService";
+
+import android.annotation.SuppressLint;
+import android.app.Service;
+import android.content.BroadcastReceiver;
+import android.content.Context;
+import android.content.Intent;
+import android.content.IntentFilter;
+import android.net.ConnectivityManager;
+import android.net.NetworkInfo;
+import android.os.Build;
+import android.os.Bundle;
+import android.os.IBinder;
+import android.os.PowerManager;
+import android.os.PowerManager.WakeLock;
+
+import androidx.localbroadcastmanager.content.LocalBroadcastManager;
+
+import org.eclipse.paho.client.mqttv3.DisconnectedBufferOptions;
+import org.eclipse.paho.client.mqttv3.IMqttDeliveryToken;
+import org.eclipse.paho.client.mqttv3.IMqttMessageListener;
+import org.eclipse.paho.client.mqttv3.MqttClientPersistence;
+import org.eclipse.paho.client.mqttv3.MqttConnectOptions;
+import org.eclipse.paho.client.mqttv3.MqttException;
+import org.eclipse.paho.client.mqttv3.MqttMessage;
+import org.eclipse.paho.client.mqttv3.MqttPersistenceException;
+import org.eclipse.paho.client.mqttv3.MqttSecurityException;
+
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+
+public class BackgroundService extends Service implements MethodChannel.MethodCallHandler, MqttTraceHandler {
+    public static final String TAG = "BackgroundService";
     private FlutterEngine backgroundEngine;
     private MethodChannel methodChannel;
     private DartExecutor.DartCallback dartCallback;
     private boolean isManuallyStopped = false;
-    Mqtt3AsyncClient hive_client;
-
+    //    Mqtt3AsyncClient hive_client;
+    MqttAndroidClient mqttAndroidClient;
     private boolean showNotificationBackground = false;
-
     private HashSet<String> topicList;
-
     boolean isMqAlive = false;
     String notificationTitle = "Boom Cabs Partner";
     String notificationContent = "...";
     MediaPlayer finalMediaPlayer;
     static boolean isDebug = true;
-
     private static final String LOCK_NAME = BackgroundService.class.getName() + ".Lock";
     private static volatile WakeLock lockStatic = null; // notice static
     //Location
@@ -111,14 +151,12 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
     private LocationCallback locationCallback;
     private Location currentLocation;
     private boolean isTrackLocRemotly = false;
-
     public static String rideReferenceNo;
     public static String messageOnNewTrip;
     public static String tripType;
     public static String tpType;
     public static String customerId = "0";
     NotificationManager bookingnotificationManager;
-
     Timer connectTimer = null;
 
     {
@@ -136,7 +174,14 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
 
     @Override
     public IBinder onBind(Intent intent) {
-        return null;
+        // What we pass back to the Activity on binding -
+        // a reference to ourself, and the activityToken
+        // we were given when started
+        String activityToken = intent
+                .getStringExtra(MqttServiceConstants.CALLBACK_ACTIVITY_TOKEN);
+        mqttServiceBinder.setActivityToken(activityToken);
+        return mqttServiceBinder;
+//        return null;
     }
 
     public static void enqueue(Context context) {
@@ -213,6 +258,17 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
 //        startTracking();
         periodicUpdateIsBgService();
         updateNotificationInfo();
+
+        /*
+         * MqttService Code
+         * */
+        // create a binder that will let the Activity UI send
+        // commands to the Service
+        mqttServiceBinder = new MqttServiceBinder(this);
+
+        // create somewhere to buffer received messages until
+        // we know that they have been passed to the application
+        messageStore = new DatabaseMessageStore(this, this);
     }
 
     Timer infiniteTimer;
@@ -650,7 +706,7 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
             stopForeground(true);
             isRunning.set(false);
 
-            hive_client.disconnect();
+            mqttAndroidClient.disconnect();
 
             if (backgroundEngine != null) {
                 backgroundEngine.getServiceControlSurface().detachFromService();
@@ -673,6 +729,25 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
 //        } catch (Exception e) {
 //            e.printStackTrace();
 //        }
+        try {
+            // disconnect immediately
+            for (MqttConnection client : connections.values()) {
+                client.disconnect(null, null);
+            }
+
+            // clear down
+            if (mqttServiceBinder != null) {
+                mqttServiceBinder = null;
+            }
+
+            unregisterBroadcastReceivers();
+
+            if (this.messageStore != null) {
+                this.messageStore.close();
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
     }
 
     private void createNotificationChannel() {
@@ -760,6 +835,11 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
 //        } catch (Exception e) {
 //            e.printStackTrace();
 //        }
+        try {
+            registerBroadcastReceivers();
+        }catch (Exception e){
+            e.printStackTrace();
+        }
 
         return START_STICKY;
     }
@@ -828,38 +908,182 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
         }
     }
 
+//    private void testConnection() {
+//        String wireLevelEndpoint = "ssl://b-30c11ec4-fc22-4fee-9c34-7265eb9c1b2f-1.mq.ap-south-1.amazonaws.com:8883";
+//        String activeMqUsername = "boommqdriver1";
+//        String activeMqPassword = "boomcabsmqpwd1323";
+//        String publishTopic = "testme";
+//        String publishMessage = "hi indra testing done";
+//
+//        MqttAndroidClient client = new MqttAndroidClient(getApplicationContext(), wireLevelEndpoint, "ClientIdIndra");
+//        MqttConnectOptions options = new MqttConnectOptions();
+//        options.setUserName(activeMqUsername);
+//        options.setPassword(activeMqPassword.toCharArray());
+//
+//        try {
+//            client.setCallback(new MqttCallbackExtended() {
+//                @Override
+//                public void connectComplete(boolean reconnect, String serverURI) {
+//
+//                    if (reconnect) {
+//                        Log.d("MQTT > ", "Reconnected to.");
+//                    } else {
+//                        Log.d("MQTT > ", "Connected to.");
+//                    }
+//                }
+//
+//                @Override
+//                public void connectionLost(Throwable cause) {
+//                    Log.d("MQTT Message > ", "The Connection was lost.");
+//                }
+//
+//                @Override
+//                public void messageArrived(String topic, MqttMessage message) throws Exception {
+//                    Log.d("MQTT Message > ", " " + new String(message.getPayload()));
+//
+//                }
+//
+//                @Override
+//                public void deliveryComplete(IMqttDeliveryToken token) {
+//
+//                }
+//            });
+//
+//            client.connect(options, null, new IMqttActionListener() {
+//                @Override
+//                public void onSuccess(IMqttToken asyncActionToken) {
+//                    // Connection succeeded
+//                    Log.d("MQTT > ", "Success");
+//
+//                    try {
+//                        client.subscribe(publishTopic, 1, null, new IMqttActionListener() {
+//                            @Override
+//                            public void onSuccess(IMqttToken asyncActionToken) {
+//                                Log.d("MQTT > ", "Subscription Success");
+//
+//                                try {
+//                                    MqttMessage message = new MqttMessage();
+//                                    message.setPayload(publishMessage.getBytes());
+//                                    client.publish(publishTopic, message);
+//
+//                                } catch (MqttException e) {
+//                                    System.err.println("Error Publishing: " + e.getMessage());
+//                                    e.printStackTrace();
+//                                }
+//                            }
+//
+//                            @Override
+//                            public void onFailure(IMqttToken asyncActionToken, Throwable exception) {
+//                                Log.i("MQTT > ", "Subscription Failed");
+//                            }
+//                        });
+//                    } catch (MqttException e) {
+//                        throw new RuntimeException(e);
+//                    }
+//                }
+//
+//                @Override
+//                public void onFailure(IMqttToken asyncActionToken, Throwable exception) {
+//                    // Connection failed
+//                    Log.i("MQTT > ", "Failed");
+//                }
+//            });
+//        } catch (MqttException e) {
+//            e.printStackTrace();
+//        }
+//    }
 
     private void initializeConnection() {
-        if (hive_client == null) {
+        if (mqttAndroidClient == null) {
             isMqAlive = false;
             String serverHost = BackgroundService.getMqServerHost(this);
             int serverPort = BackgroundService.getMqPort(this);
             String clientId = BackgroundService.getMqClientId(this);
-            hive_client = Mqtt3Client.builder()
-                    .identifier(clientId)
-                    .serverHost(serverHost)
-                    .serverPort(serverPort)
-                    .addConnectedListener(context -> {
-                        if (isDebug) {
-                            Log.d(">>> BGS Connected ", context.toString());
-                        }
-                        try {
-                            isMqAlive = true;
-                            onMqttConnected();
-                            handleSubscriptionResponse();
 
-                            if (connectTimer != null) {
-                                connectTimer.cancel();
-                                connectTimer = null;
+            mqttAndroidClient = new MqttAndroidClient(getApplicationContext(), serverHost, clientId);
+
+//            mqttAndroidClient = Mqtt3Client.builder()
+//                    .identifier(clientId)
+//                    .serverHost(serverHost)
+//                    .serverPort(serverPort)
+//                    .addConnectedListener(context -> {
+//                        if (isDebug) {
+//                            Log.d(">>> BGS Connected ", context.toString());
+//                        }
+//                        try {
+//                            isMqAlive = true;
+//                            onMqttConnected();
+//                            handleSubscriptionResponse();
+//
+//                            if (connectTimer != null) {
+//                                connectTimer.cancel();
+//                                connectTimer = null;
+//                            }
+//                        } catch (Exception exception) {
+//                            exception.printStackTrace();
+//                        }
+//                    })
+//                    .addDisconnectedListener(context -> {
+//                        try {
+//                            if (isDebug) {
+//                                Log.d(">>> BGS Disconnected ", context.toString());
+//                            }
+//                            int PERIOD = 10;
+//                            isMqAlive = false;
+//                            if (connectTimer == null) {
+//                                connectTimer = new Timer();
+//                                connectTimer.schedule(new TimerTask() {
+//                                    @Override
+//                                    public void run() {
+//                                        connectMqtt();
+//                                    }
+//                                }, PERIOD * 1000, PERIOD * 1000);
+//                            }
+//
+//                        } catch (Exception exception) {
+//                            exception.printStackTrace();
+//                        }
+//                        try {
+//                            updateDriverMQStatus();
+//                        } catch (Exception exception) {
+//                            exception.printStackTrace();
+//                        }
+//                    })
+//                    .buildAsync();
+            connectMqtt();
+        }
+    }
+
+    private void connectMqtt() {
+        if (isRunning.get() && mqttAndroidClient != null && !mqttAndroidClient.isConnected()) {
+            String username = BackgroundService.getMqUsername(this);
+            String password = BackgroundService.getMqPassword(this);
+
+            try {
+                MqttConnectOptions options = new MqttConnectOptions();
+                options.setUserName(username);
+                options.setPassword(password.toCharArray());
+
+                mqttAndroidClient.setCallback(new MqttCallbackExtended() {
+                    @Override
+                    public void connectComplete(boolean reconnect, String serverURI) {
+
+                        if (reconnect) {
+                            Log.d("MQTT > ", "Reconnected to.");
+                        } else {
+                            if (isDebug) {
+                                Log.d(">>> BGS Connected ", "");
                             }
-                        } catch (Exception exception) {
-                            exception.printStackTrace();
+
                         }
-                    })
-                    .addDisconnectedListener(context -> {
+                    }
+
+                    @Override
+                    public void connectionLost(Throwable cause) {
+                        Log.d("MQTT Message > ", "The Connection was lost.");
                         try {
                             if (isDebug) {
-                                Log.d(">>> BGS Disconnected ", context.toString());
+                                Log.d(">>> BGS Disconnected ", "");
                             }
                             int PERIOD = 10;
                             isMqAlive = false;
@@ -881,11 +1105,91 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
                         } catch (Exception exception) {
                             exception.printStackTrace();
                         }
-                    })
-                    .buildAsync();
-            connectMqtt();
+                    }
+
+                    @Override
+                    public void messageArrived(String topic, MqttMessage message) throws Exception {
+                        Log.d("MQTT Message > ", " " + new String(message.getPayload()));
+
+                        handleSubscriptionResponse(topic, new String(message.getPayload()));
+                    }
+
+                    @Override
+                    public void deliveryComplete(IMqttDeliveryToken token) {
+
+                    }
+                });
+
+                mqttAndroidClient.connect(options, null, new IMqttActionListener() {
+                    @Override
+                    public void onSuccess(IMqttToken asyncActionToken) {
+                        // Connection succeeded
+                        Log.d("MQTT > ", "Success");
+                        try {
+                            isMqAlive = true;
+                            onMqttConnected();
+//                            handleSubscriptionResponse();
+
+                            if (connectTimer != null) {
+                                connectTimer.cancel();
+                                connectTimer = null;
+                            }
+                        } catch (Exception exception) {
+                            exception.printStackTrace();
+                        }
+
+//                        try {
+//                            client.subscribe(publishTopic, 1, null, new IMqttActionListener() {
+//                                @Override
+//                                public void onSuccess(IMqttToken asyncActionToken) {
+//                                    Log.d("MQTT > ", "Subscription Success");
+//
+//                                    try {
+//                                        MqttMessage message = new MqttMessage();
+//                                        message.setPayload(publishMessage.getBytes());
+//                                        client.publish(publishTopic, message);
+//
+//                                    } catch (MqttException e) {
+//                                        System.err.println("Error Publishing: " + e.getMessage());
+//                                        e.printStackTrace();
+//                                    }
+//                                }
+//
+//                                @Override
+//                                public void onFailure(IMqttToken asyncActionToken, Throwable exception) {
+//                                    Log.i("MQTT > ", "Subscription Failed");
+//                                }
+//                            });
+//                        } catch (MqttException e) {
+//                            throw new RuntimeException(e);
+//                        }
+                    }
+
+                    @Override
+                    public void onFailure(IMqttToken asyncActionToken, Throwable exception) {
+                        // Connection failed
+                        Log.i("MQTT > ", "Failed");
+                    }
+                });
+            } catch (MqttException e) {
+                e.printStackTrace();
+            }
+
+
+//            hive_client.toAsync().connectWith()
+//                    .simpleAuth()
+//                    .username(username)
+//                    .password(password.getBytes())
+//                    .applySimpleAuth()
+//                    .keepAlive(10)
+//                    .send();
+//            if (isDebug) {
+//                Log.d(">>> BGS connectMqtt", "hive_client.toAsync().connectWith()");
+//            }
+
         }
     }
+
 
     private void onMqttConnected() {
         try {
@@ -923,24 +1227,6 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
         }
     }
 
-    private void connectMqtt() {
-        if (isRunning.get() && hive_client != null && !hive_client.getState().isConnected()) {
-            String username = BackgroundService.getMqUsername(this);
-            String password = BackgroundService.getMqPassword(this);
-            hive_client.toAsync().connectWith()
-                    .simpleAuth()
-                    .username(username)
-                    .password(password.getBytes())
-                    .applySimpleAuth()
-                    .keepAlive(10)
-                    .send();
-            if (isDebug) {
-                Log.d(">>> BGS connectMqtt", "hive_client.toAsync().connectWith()");
-            }
-
-        }
-    }
-
     Timer bookingCounterTimer = null;
     static final int PASS_TIMEOUT = 30;
     static int timerCurrentTick = PASS_TIMEOUT;
@@ -963,7 +1249,7 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
 //        }
 
         if (bookingCounterTimer == null) {
-            bookingCounterTimer = new Timer() ;
+            bookingCounterTimer = new Timer();
             isBookingTimerCancelled = false;
             timerCurrentTick = PASS_TIMEOUT; // 30 sec
             bookingCounterTimer.schedule(new TimerTask() {
@@ -993,235 +1279,238 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
 //        }
     }
 
-    @SuppressLint("NewApi")
-    String getPassBookingPayload(String driverId, String messageOnNewTrip, String otp) {
-        //PART_1 : Customer Detail
-        //PART_2 : Driver Detail
-        //PART_3 : Trip Details
-        SimpleDateFormat formatter = new SimpleDateFormat("yyyy-MM-dd hh:mm:ss");
-        final String formattedDate = formatter.format(new Date());
-        if (driverId == null || messageOnNewTrip == null) {
-            return "";
-        }
-        String[] parts = messageOnNewTrip.split("#");
-        // Part #2
-        List<String> valuesPart3 = new ArrayList<>();
-        valuesPart3.add(driverId); //
-        valuesPart3.add(driverId); //
-        valuesPart3.add(""); // driver username
-        valuesPart3.add(currentLocation.getLatitude() + "," + currentLocation.getLongitude()); // D_ID
-        valuesPart3.add(""); // Car id
-        valuesPart3.add(""); // Car model
-        valuesPart3.add(""); // Car no
-        valuesPart3.add(formattedDate); // D_ID
-        valuesPart3.add(formattedDate); // D_ID
-        return "RQAP#" + parts[1] +
-                "#" +
-                String.join("|", valuesPart3) +
-                "#" +
-                parts[3] +
-                "#0";
-    }
+//    @SuppressLint("NewApi")
+//    String getPassBookingPayload(String driverId, String messageOnNewTrip, String otp) {
+//        //PART_1 : Customer Detail
+//        //PART_2 : Driver Detail
+//        //PART_3 : Trip Details
+//        SimpleDateFormat formatter = new SimpleDateFormat("yyyy-MM-dd hh:mm:ss");
+//        final String formattedDate = formatter.format(new Date());
+//        if (driverId == null || messageOnNewTrip == null) {
+//            return "";
+//        }
+//        String[] parts = messageOnNewTrip.split("#");
+//        // Part #2
+//        List<String> valuesPart3 = new ArrayList<>();
+//        valuesPart3.add(driverId); //
+//        valuesPart3.add(driverId); //
+//        valuesPart3.add(""); // driver username
+//        valuesPart3.add(currentLocation.getLatitude() + "," + currentLocation.getLongitude()); // D_ID
+//        valuesPart3.add(""); // Car id
+//        valuesPart3.add(""); // Car model
+//        valuesPart3.add(""); // Car no
+//        valuesPart3.add(formattedDate); // D_ID
+//        valuesPart3.add(formattedDate); // D_ID
+//        return "RQAP#" + parts[1] +
+//                "#" +
+//                String.join("|", valuesPart3) +
+//                "#" +
+//                parts[3] +
+//                "#0";
+//    }
 
-    void autoPassTheBooking() {
+//    void autoPassTheBooking() {
+//        try {
+//            /*Create handle for the RetrofitInstance interface*/
+//            String token = getApiTokenValue(this);
+//            String driverId = getDriverId(this);
+//            if (token != null && token.length() > 10) {
+//                final RejectRideRequest rideRequest = new RejectRideRequest();
+//                rideRequest.trip_reference_number_fk = rideReferenceNo;
+//                rideRequest.driver_id_fk = Integer.parseInt(driverId != "" ? driverId : "0");
+//                rideRequest.lat = currentLocation.getLatitude();
+//                rideRequest.lng = currentLocation.getLongitude();
+//                rideRequest.driver_cancel_reason = "Auto-Pass";
+//
+//                ApiEndpoints apiEndpoints = RetrofitClientInstance.getRetrofitInstance(token).create(ApiEndpoints.class);
+//                Call<DriverLocation> call = apiEndpoints.rejectRideRequest(rideRequest);
+//                call.enqueue(new Callback<DriverLocation>() {
+//                    @Override
+//                    public void onResponse(Call<DriverLocation> call, Response<DriverLocation> response) {
+//                        if (isDebug) {
+//                            Log.d(">>> ApiCall-Success >", response.toString());
+//                        }
+//                        // Pass-Cancel Invoice not shown to driver
+//                        unSubscribeTopic("rd/rq/cl/" + rideReferenceNo);
+//                        Random rand = new Random();
+//                        String otp = String.format("%04d", rand.nextInt(10000));
+//                        messageOnNewTrip = messageOnNewTrip.replaceAll("=OTP=", otp);
+//                        String passpay = getPassBookingPayload(driverId, messageOnNewTrip, otp);
+//
+//                        if (tpType.equals("4") || tpType.equals("5")) {
+//                            // This is for portal
+//                            publishMessage(Constants.MQ_ENV_PREFIX + "/" + "rd/rq/ak/ap/" + rideReferenceNo, passpay);
+//                            publishMessage(Constants.MQ_ENV_PREFIX + "/" + "rd/rq/ak/" + rideReferenceNo, passpay);
+//                            try {
+//                                PassRideRequest passRideRequest = new PassRideRequest();
+//                                passRideRequest.reference_number = rideReferenceNo;
+//                                passRideRequest.user_id_fk = Integer.parseInt(customerId != "" ? customerId : "0"); // customerId
+//                                passRideRequest.from_latitude = currentLocation.getLatitude();
+//                                passRideRequest.from_longitude = currentLocation.getLongitude();
+//                                passRideRequest.trip_booking_type = "Pass";
+//                                ApiEndpoints apiEndpoints = RetrofitClientInstance.getRetrofitInstance(token).create(ApiEndpoints.class);
+//                                Call<DriverLocation> call2 = apiEndpoints.passRideRequest(passRideRequest);
+//                                call2.enqueue(new Callback<DriverLocation>() {
+//                                    @Override
+//                                    public void onResponse(Call<DriverLocation> call, Response<DriverLocation> response) {
+//                                        if (isDebug) {
+//                                            Log.d(">>>ApiCall-PassRide>", response.toString());
+//                                        }
+//                                    }
+//
+//                                    @Override
+//                                    public void onFailure(Call<DriverLocation> call, Throwable t) {
+//                                        if (isDebug) {
+//                                            Log.d(">>> Error-Pass > ", t.getMessage());
+//                                        }
+//                                    }
+//                                });
+//                            } catch (Exception e) {
+//                                e.printStackTrace();
+//
+//                            }
+//                        } else {
+//                            //sending to customer mobile app
+//                            publishMessage(Constants.MQ_ENV_PREFIX + "/" + "rd/rq/ak/" + rideReferenceNo, passpay);
+//                        }
+//                    }
+//
+//                    @Override
+//                    public void onFailure(Call<DriverLocation> call, Throwable t) {
+//                        if (isDebug) {
+//                            Log.d(">>> ApiCall-Failed > ", t.getMessage());
+//                        }
+//
+//                    }
+//                });
+//            }
+//        } catch (Exception e) {
+//            e.printStackTrace();
+//
+//        }
+//    }
+
+    void handleSubscriptionResponse(String topic, String payload) {
+
         try {
-            /*Create handle for the RetrofitInstance interface*/
-            String token = getApiTokenValue(this);
-            String driverId = getDriverId(this);
-            if (token != null && token.length() > 10) {
-                final RejectRideRequest rideRequest = new RejectRideRequest();
-                rideRequest.trip_reference_number_fk = rideReferenceNo;
-                rideRequest.driver_id_fk = Integer.parseInt(driverId != "" ? driverId : "0");
-                rideRequest.lat = currentLocation.getLatitude();
-                rideRequest.lng = currentLocation.getLongitude();
-                rideRequest.driver_cancel_reason = "Auto-Pass";
+//            String topic = mqtt3Publish.getTopic().toString();
+//            String payload = new String(mqtt3Publish.getPayloadAsBytes());
+            JSONObject mqData = new JSONObject();
+            mqData.put("responseData", "mqttResponse");
+            mqData.put("topic", topic);
+            mqData.put("payload", payload);
 
-                ApiEndpoints apiEndpoints = RetrofitClientInstance.getRetrofitInstance(token).create(ApiEndpoints.class);
-                Call<DriverLocation> call = apiEndpoints.rejectRideRequest(rideRequest);
-                call.enqueue(new Callback<DriverLocation>() {
-                    @Override
-                    public void onResponse(Call<DriverLocation> call, Response<DriverLocation> response) {
-                        if (isDebug) {
-                            Log.d(">>> ApiCall-Success >", response.toString());
-                        }
-                        // Pass-Cancel Invoice not shown to driver
-                        unSubscribeTopic("rd/rq/cl/" + rideReferenceNo);
-                        Random rand = new Random();
-                        String otp = String.format("%04d", rand.nextInt(10000));
-                        messageOnNewTrip = messageOnNewTrip.replaceAll("=OTP=", otp);
-                        String passpay = getPassBookingPayload(driverId, messageOnNewTrip, otp);
+            if (topic.contains(Constants.MQ_ENV_PREFIX + "/dr/rd/rq/")) {
+                String[] rideDetails = payload.split("#");
 
-                        if (tpType.equals("4") || tpType.equals("5")) {
-                            // This is for portal
-                            publishMessage(Constants.MQ_ENV_PREFIX + "/" + "rd/rq/ak/ap/" + rideReferenceNo, passpay);
-                            publishMessage(Constants.MQ_ENV_PREFIX + "/" + "rd/rq/ak/" + rideReferenceNo, passpay);
-                            try {
-                                PassRideRequest passRideRequest = new PassRideRequest();
-                                passRideRequest.reference_number = rideReferenceNo;
-                                passRideRequest.user_id_fk = Integer.parseInt(customerId != "" ? customerId : "0"); // customerId
-                                passRideRequest.from_latitude = currentLocation.getLatitude();
-                                passRideRequest.from_longitude = currentLocation.getLongitude();
-                                passRideRequest.trip_booking_type = "Pass";
-                                ApiEndpoints apiEndpoints = RetrofitClientInstance.getRetrofitInstance(token).create(ApiEndpoints.class);
-                                Call<DriverLocation> call2 = apiEndpoints.passRideRequest(passRideRequest);
-                                call2.enqueue(new Callback<DriverLocation>() {
-                                    @Override
-                                    public void onResponse(Call<DriverLocation> call, Response<DriverLocation> response) {
-                                        if (isDebug) {
-                                            Log.d(">>>ApiCall-PassRide>", response.toString());
-                                        }
-                                    }
+                String cmd = rideDetails[0].toString().toUpperCase();
+                if (cmd.equals("RDRQ")) {
+                    rideReferenceNo = rideDetails[2];
+                    subscribeTopic(Constants.MQ_ENV_PREFIX + "/dr/rd/rr/" + rideReferenceNo);
+                }
+                if (cmd.equals("RDDA")) {
+//                                if (showNotificationBackground) {
+                    subscribeTopic(Constants.MQ_ENV_PREFIX + "/dr/rd/rr/" + rideReferenceNo);
+                    showNotification(NotificationType.BOOKING_REQUEST, topic, payload);
+                    // booking ---
+                    rideReferenceNo = rideDetails[2];
+                    messageOnNewTrip = payload;
+                    startBookingStartProcess(payload);
+//                                }
+                }
 
-                                    @Override
-                                    public void onFailure(Call<DriverLocation> call, Throwable t) {
-                                        if (isDebug) {
-                                            Log.d(">>> Error-Pass > ", t.getMessage());
-                                        }
-                                    }
-                                });
-                            } catch (Exception e) {
-                                e.printStackTrace();
+            } else if (topic.startsWith(Constants.MQ_ENV_PREFIX + "/dr/rd/rr/")) {
+                String[] rideDetails = payload.split("#");
 
-                            }
-                        } else {
-                            //sending to customer mobile app
-                            publishMessage(Constants.MQ_ENV_PREFIX + "/" + "rd/rq/ak/" + rideReferenceNo, passpay);
-                        }
-                    }
+                // check in payload its a payment done or not
+                String cmd = rideDetails[0].toString().toUpperCase();
 
-                    @Override
-                    public void onFailure(Call<DriverLocation> call, Throwable t) {
-                        if (isDebug) {
-                            Log.d(">>> ApiCall-Failed > ", t.getMessage());
-                        }
+                if (cmd.equals("RQAA")) {
+                    resetBookingCounterTimer();
+                } else if (cmd.equals("RDST")) {
+                    startTracking();
+                } else if (cmd.equals("RDCT")) {
+                    String driverId = getDriverId(this);
+                    subscribeTopic(Constants.MQ_ENV_PREFIX + "/dr/rd/rq/" + driverId);
 
-                    }
+                    stopTracking();
+                    String emptyListStr = "[]"; // new String(data)
+                    setLatLngList(this, emptyListStr);
+                } else if (cmd.equals("RDCL")) {
+                    showNotification(NotificationType.BOOKING_CANCELLED, topic, payload);
+                    String driverId = getDriverId(this);
+                    subscribeTopic(Constants.MQ_ENV_PREFIX + "/dr/rd/rq/" + driverId);
+                } else if (cmd.equals("RPDN")) {
+                    showNotification(NotificationType.PAYMENT_DONE, topic, payload);
+                }
+
+            } else if (topic.contains(Constants.MQ_ENV_PREFIX + "/rd/handshake/")) {
+                // check in payload its a payment done or not
+                String driverId = getDriverId(this);
+                String[] vals = payload.split("=");
+                publishMessage(Constants.MQ_ENV_PREFIX + "/rd/handshake/ack/" + vals[0], driverId + "|");
+            } else if (topic.startsWith(Constants.MQ_ENV_PREFIX + "/dr/lc/")) {
+                String[] rideDetails = payload.split("#");
+                String cmd = rideDetails[0].toString().toUpperCase();
+                if (cmd.equals("DRRL")) {
+                    String rideReferenceNo = rideDetails[2];
+                    getCurrentLocation(true, rideReferenceNo, cmd);
+                } else if (cmd.equals("DRLL")) {
+                    String rideReferenceNo = rideDetails[2];
+                    String passpay = cmd + "#" + rideReferenceNo + "#" + this.currentLocation.getLatitude() + "," + this.currentLocation.getLongitude()
+                            + "#" + this.currentLocation.getAccuracy()
+                            + "#" + this.currentLocation.getAltitude()
+                            + "#" + this.currentLocation.getBearing()
+                            + "#" + this.currentLocation.getSpeed();
+                    publishMessage(Constants.MQ_ENV_PREFIX + "/" + "dr/lc/ak/" + rideReferenceNo, passpay);
+                } else {
+                    String rideReferenceNo = rideDetails[2];
+                    String passpay = cmd + "#" + rideReferenceNo + "#" + this.currentLocation.getLatitude() + "," + this.currentLocation.getLongitude()
+                            + "#" + this.currentLocation.getAccuracy()
+                            + "#" + this.currentLocation.getAltitude()
+                            + "#" + this.currentLocation.getBearing()
+                            + "#" + this.currentLocation.getSpeed();
+                    publishMessage(Constants.MQ_ENV_PREFIX + "/" + "dr/lc/ak/" + rideReferenceNo, passpay);
+                }
+            } else if (topic.startsWith(Constants.MQ_ENV_PREFIX + "/drivers/location/req/")) {
+                isTrackLocRemotly = true;
+                ContextCompat.getMainExecutor(this).execute(() -> {
+                    startTracking();
                 });
+            } else if (topic.startsWith(Constants.MQ_ENV_PREFIX + "/notifydriver")) {
+                JSONObject mqData_ = new JSONObject();
+                mqData_.put("responseData", "on_screen_notification");
+                localBroadcastManager(mqData_, ">>> In-App_Notification > ", "in_app_Notification");
             }
-        } catch (Exception e) {
+
+            if (methodChannel != null) {
+                try {
+                    localBroadcastManager(mqData, ">>> BGS >>>  ", "handleSubscriptionResponse broadcast");
+                } catch (Exception e) {
+                    e.printStackTrace();
+
+                }
+            }
+        } catch (JSONException e) {
             e.printStackTrace();
 
         }
-    }
 
-    void handleSubscriptionResponse() {
-        hive_client.publishes(MqttGlobalPublishFilter.ALL,
-                mqtt3Publish -> {
-                    try {
-                        if (isDebug) {
-                            Log.d(">>> BGS >>> ", mqtt3Publish.toString());
-                        }
-
-                        String topic = mqtt3Publish.getTopic().toString();
-                        String payload = new String(mqtt3Publish.getPayloadAsBytes());
-                        JSONObject mqData = new JSONObject();
-                        mqData.put("responseData", "mqttResponse");
-                        mqData.put("topic", topic);
-                        mqData.put("payload", payload);
-
-                        Log.d("in coming_topic", topic);
-
-                        if (topic.contains(Constants.MQ_ENV_PREFIX + "/dr/rd/rq/")) {
-                            String[] rideDetails = payload.split("#");
-
-                            String cmd = rideDetails[0].toString().toUpperCase();
-                            if (cmd.equals("RDRQ")) {
-                                rideReferenceNo = rideDetails[2];
-                                subscribeTopic(Constants.MQ_ENV_PREFIX + "/dr/rd/rr/" + rideReferenceNo);
-                            } if(cmd.equals("RDDA")){
-//                                if (showNotificationBackground) {
-                                subscribeTopic(Constants.MQ_ENV_PREFIX + "/dr/rd/rr/" + rideReferenceNo);
-                                showNotification(NotificationType.BOOKING_REQUEST, topic, payload);
-                                // booking ---
-                                rideReferenceNo = rideDetails[2];
-                                messageOnNewTrip = payload;
-                                startBookingStartProcess(payload);
-//                                }
-                            }
-
-                        } else if (topic.startsWith(Constants.MQ_ENV_PREFIX + "/dr/rd/rr/")) {
-                            String[] rideDetails = payload.split("#");
-
-                            // check in payload its a payment done or not
-                            String cmd = rideDetails[0].toString().toUpperCase();
-
-                            if (cmd.equals("RQAA")) {
-                                resetBookingCounterTimer();
-                            } else if (cmd.equals("RDST")) {
-                                startTracking();
-                            } else if (cmd.equals("RDCT")) {
-                                String driverId = getDriverId(this);
-                                subscribeTopic(Constants.MQ_ENV_PREFIX + "/dr/rd/rq/" + driverId);
-
-                                stopTracking();
-                                String emptyListStr = "[]"; // new String(data)
-                                setLatLngList(this, emptyListStr);
-                            } else if (cmd.equals("RDCL")) {
-                                showNotification(NotificationType.BOOKING_CANCELLED, topic, payload);
-                                String driverId = getDriverId(this);
-                                subscribeTopic(Constants.MQ_ENV_PREFIX + "/dr/rd/rq/" + driverId);
-                            } else if (cmd.equals("RPDN")) {
-                                showNotification(NotificationType.PAYMENT_DONE, topic, payload);
-                            }
-
-                        } else if (topic.contains(Constants.MQ_ENV_PREFIX + "/rd/handshake/")) {
-                            // check in payload its a payment done or not
-                            String driverId = getDriverId(this);
-                            String[] vals = payload.split("=");
-                            publishMessage(Constants.MQ_ENV_PREFIX + "/rd/handshake/ack/" + vals[0], driverId + "|");
-                        } else if (topic.startsWith(Constants.MQ_ENV_PREFIX + "/dr/lc/")) {
-                            String[] rideDetails = payload.split("#");
-                            String cmd = rideDetails[0].toString().toUpperCase();
-                            if (cmd.equals("DRRL")) {
-                                String rideReferenceNo = rideDetails[2];
-                                getCurrentLocation(true, rideReferenceNo, cmd);
-                            } else if (cmd.equals("DRLL")) {
-                                String rideReferenceNo = rideDetails[2];
-                                String passpay = cmd + "#" + rideReferenceNo + "#" + this.currentLocation.getLatitude() + "," + this.currentLocation.getLongitude()
-                                        + "#" + this.currentLocation.getAccuracy()
-                                        + "#" + this.currentLocation.getAltitude()
-                                        + "#" + this.currentLocation.getBearing()
-                                        + "#" + this.currentLocation.getSpeed();
-                                publishMessage(Constants.MQ_ENV_PREFIX + "/" + "dr/lc/ak/" + rideReferenceNo, passpay);
-                            } else {
-                                String rideReferenceNo = rideDetails[2];
-                                String passpay = cmd + "#" + rideReferenceNo + "#" + this.currentLocation.getLatitude() + "," + this.currentLocation.getLongitude()
-                                        + "#" + this.currentLocation.getAccuracy()
-                                        + "#" + this.currentLocation.getAltitude()
-                                        + "#" + this.currentLocation.getBearing()
-                                        + "#" + this.currentLocation.getSpeed();
-                                publishMessage(Constants.MQ_ENV_PREFIX + "/" + "dr/lc/ak/" + rideReferenceNo, passpay);
-                            }
-                        } else if (topic.startsWith(Constants.MQ_ENV_PREFIX + "/drivers/location/req/")) {
-                            isTrackLocRemotly = true;
-                            ContextCompat.getMainExecutor(this).execute(() -> {
-                                startTracking();
-                            });
-                        } else if (topic.startsWith(Constants.MQ_ENV_PREFIX + "/notifydriver")) {
-                            JSONObject mqData_ = new JSONObject();
-                            mqData_.put("responseData", "on_screen_notification");
-                            localBroadcastManager(mqData_, ">>> In-App_Notification > ", "in_app_Notification");
-                        }
-
-                        if (methodChannel != null) {
-                            try {
-                                localBroadcastManager(mqData, ">>> BGS >>>  ", "handleSubscriptionResponse broadcast");
-                            } catch (Exception e) {
-                                e.printStackTrace();
-
-                            }
-                        }
-                    } catch (JSONException e) {
-                        e.printStackTrace();
-
-                    }
-                });
+//        hive_client.publishes(MqttGlobalPublishFilter.ALL,
+//                mqtt3Publish -> {
+//
+//                });
     }
 
     void unSubscribeTopic(String topicName) {
         String top = topicName.replaceAll("=", "/");
         removeTopic(top);
-        hive_client.unsubscribeWith().topicFilter(top).send();
+//        hive_client.unsubscribeWith().topicFilter(top).send();
+        try {
+            mqttAndroidClient.unsubscribe(top);
+        } catch (MqttException e) {
+            e.printStackTrace();
+        }
         Log.d("unSubscribeTopic>>>>", top);
 
     }
@@ -1236,8 +1525,11 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
         }
 
         addTopic(top);
-        hive_client.subscribeWith().topicFilter(top).qos(MqttQos.EXACTLY_ONCE).send();
-
+        try {
+            mqttAndroidClient.subscribe(top, 1);
+        } catch (MqttException e) {
+            e.printStackTrace();
+        }
         Log.d("subscribeTopic_>>>>", top);
     }
 
@@ -1263,17 +1555,20 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
             }
         } catch (Exception e) {
             e.printStackTrace();
-
         }
-        Log.d(">>","-------------------------------------------------------");
-        Log.d("publish topic >>>>>>>> ", top);
-        Log.d("publish Message >>>>>>>> ", message);
-        Log.d(">>","-------------------------------------------------------");
-        hive_client.toAsync().publishWith()
-                .topic(top)
-                .payload(message.getBytes())
-                .qos(MqttQos.EXACTLY_ONCE)
-                .send();
+        Log.d(">>", "-------------------------------------------------------");
+        Log.d("publish topic >", top);
+        Log.d("publish Message >", message);
+        Log.d(">>", "-------------------------------------------------------");
+        try {
+            MqttMessage mqttMessage = new MqttMessage();
+            mqttMessage.setQos(1);
+            mqttMessage.setPayload(message.getBytes());
+            mqttAndroidClient.publish(top, mqttMessage);
+        } catch (MqttException e) {
+            System.err.println("Error Publishing: " + e.getMessage());
+            e.printStackTrace();
+        }
     }
 
     void resetBookingCounterTimer() {
@@ -1542,8 +1837,7 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
                     e.printStackTrace();
 
                 }
-            }
-            else if (notificationType == NotificationType.BOOKING_CANCELLED) {
+            } else if (notificationType == NotificationType.BOOKING_CANCELLED) {
                 NotificationCompat.Builder builder = new NotificationCompat.Builder(this, "FOREGROUND_DEFAULT")
                         .setSmallIcon(R.mipmap.ic_launcher)
                         .setContentTitle("Booking Cancelled")
@@ -1562,8 +1856,7 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
                     e.printStackTrace();
 
                 }
-            }
-            else if (notificationType == NotificationType.PAYMENT_DONE) {
+            } else if (notificationType == NotificationType.PAYMENT_DONE) {
                 NotificationCompat.Builder builder = new NotificationCompat.Builder(this, "FOREGROUND_DEFAULT")
                         .setSmallIcon(R.mipmap.ic_launcher)
                         .setContentTitle("Payment Completed")
@@ -1622,7 +1915,7 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
 //                className, methodName, lineNumber);
 //    }
 
-//    //new Throwable().getStackTrace()[0].getLineNumber()
+    //    //new Throwable().getStackTrace()[0].getLineNumber()
 //    void addAppEventLog(LogType logType, LogTag logTag,
 //                        String title, String data,
 //                        String className, String methodName, int lineNo) {
@@ -1701,9 +1994,14 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
 
     private void subscribeTopicsFromLastSession() {
         topicList = getSharedPreferencesTopicList(this);
-        if (topicList != null && topicList.size() > 0) {
+        if (topicList != null && !topicList.isEmpty()) {
             for (String value : topicList) {
-                hive_client.subscribeWith().topicFilter(value).qos(MqttQos.EXACTLY_ONCE).send();
+                try {
+                    mqttAndroidClient.subscribe(value, 1);
+                } catch (MqttException e) {
+                    e.printStackTrace();
+                }
+//                hive_client.subscribeWith().topicFilter(value).qos(MqttQos.EXACTLY_ONCE).send();send
             }
         }
     }
@@ -1946,6 +2244,557 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
 //            }
 //        }
 //    };
+
+
+    /***
+     ///// MqttService
+     */
+
+    // Identifier for Intents, log messages, etc..
+//    static final String TAG = "MqttService";
+    // callback id for making trace callbacks to the Activity
+    // needs to be set by the activity as appropriate
+    private String traceCallbackId;
+    // state of tracing
+    private boolean traceEnabled = false;
+    // somewhere to persist received messages until we're sure
+    // that they've reached the application
+    public MessageStore messageStore;
+    // An intent receiver to deal with changes in network connectivity
+    private BackgroundService.NetworkConnectionIntentReceiver networkConnectionMonitor;
+    //a receiver to recognise when the user changes the "background data" preference
+    // and a flag to track that preference
+    // Only really relevant below android version ICE_CREAM_SANDWICH - see
+    // android docs
+    private BackgroundService.BackgroundDataPreferenceReceiver backgroundDataPreferenceMonitor;
+    private volatile boolean backgroundDataEnabled = true;
+    // a way to pass ourself back to the activity
+    private MqttServiceBinder mqttServiceBinder;
+    // mapping from client handle strings to actual client connections.
+    private Map<String/* clientHandle */, MqttConnection/* client */> connections = new ConcurrentHashMap<>();
+
+    /**
+     * pass data back to the Activity, by building a suitable Intent object and
+     * broadcasting it
+     *
+     * @param clientHandle source of the data
+     * @param status       OK or Error
+     * @param dataBundle   the data to be passed
+     */
+    public void callbackToActivity(String clientHandle, Status status,
+                                   Bundle dataBundle) {
+        // Don't call traceDebug, as it will try to callbackToActivity leading
+        // to recursion.
+        Intent callbackIntent = new Intent(
+                MqttServiceConstants.CALLBACK_TO_ACTIVITY);
+        if (clientHandle != null) {
+            callbackIntent.putExtra(
+                    MqttServiceConstants.CALLBACK_CLIENT_HANDLE, clientHandle);
+        }
+        callbackIntent.putExtra(MqttServiceConstants.CALLBACK_STATUS, status);
+        if (dataBundle != null) {
+            callbackIntent.putExtras(dataBundle);
+        }
+        LocalBroadcastManager.getInstance(this).sendBroadcast(callbackIntent);
+    }
+
+    // The major API implementation follows :-
+
+    /**
+     * Get an MqttConnection object to represent a connection to a server
+     *
+     * @param serverURI   specifies the protocol, host name and port to be used to connect to an MQTT server
+     * @param clientId    specifies the name by which this connection should be identified to the server
+     * @param contextId   specifies the app conext info to make a difference between apps
+     * @param persistence specifies the persistence layer to be used with this client
+     * @return a string to be used by the Activity as a "handle" for this
+     * MqttConnection
+     */
+    public String getClient(String serverURI, String clientId, String contextId, MqttClientPersistence persistence) {
+        String clientHandle = serverURI + ":" + clientId + ":" + contextId;
+        if (!connections.containsKey(clientHandle)) {
+            MqttConnection client = new MqttConnection(this, serverURI,
+                    clientId, persistence, clientHandle);
+            connections.put(clientHandle, client);
+        }
+        return clientHandle;
+    }
+
+    /**
+     * Connect to the MQTT server specified by a particular client
+     *
+     * @param clientHandle      identifies the MqttConnection to use
+     * @param connectOptions    the MQTT connection options to be used
+     * @param invocationContext arbitrary data to be passed back to the application
+     * @param activityToken     arbitrary identifier to be passed back to the Activity
+     * @throws MqttSecurityException thrown if there is a security exception
+     * @throws MqttException         thrown for all other MqttExceptions
+     */
+    public void connect(String clientHandle, MqttConnectOptions connectOptions,
+                        String invocationContext, String activityToken)
+            throws MqttSecurityException, MqttException {
+        MqttConnection client = getConnection(clientHandle);
+        client.connect(connectOptions, null, activityToken);
+
+    }
+
+    /**
+     * Request all clients to reconnect if appropriate
+     */
+    void reconnect() {
+        traceDebug(TAG, "Reconnect to server, client size=" + connections.size());
+        for (MqttConnection client : connections.values()) {
+            traceDebug("Reconnect Client:",
+                    client.getClientId() + '/' + client.getServerURI());
+            if (this.isOnline()) {
+                client.reconnect();
+            }
+        }
+    }
+
+    /**
+     * Close connection from a particular client
+     *
+     * @param clientHandle identifies the MqttConnection to use
+     */
+    public void close(String clientHandle) {
+        MqttConnection client = getConnection(clientHandle);
+        client.close();
+    }
+
+    /**
+     * Disconnect from the server
+     *
+     * @param clientHandle      identifies the MqttConnection to use
+     * @param invocationContext arbitrary data to be passed back to the application
+     * @param activityToken     arbitrary identifier to be passed back to the Activity
+     */
+    public void disconnect(String clientHandle, String invocationContext,
+                           String activityToken) {
+        MqttConnection client = getConnection(clientHandle);
+        client.disconnect(invocationContext, activityToken);
+        connections.remove(clientHandle);
+
+
+        // the activity has finished using us, so we can stop the service
+        // the activities are bound with BIND_AUTO_CREATE, so the service will
+        // remain around until the last activity disconnects
+        stopSelf();
+    }
+
+    /**
+     * Disconnect from the server
+     *
+     * @param clientHandle      identifies the MqttConnection to use
+     * @param quiesceTimeout    in milliseconds
+     * @param invocationContext arbitrary data to be passed back to the application
+     * @param activityToken     arbitrary identifier to be passed back to the Activity
+     */
+    public void disconnect(String clientHandle, long quiesceTimeout,
+                           String invocationContext, String activityToken) {
+        MqttConnection client = getConnection(clientHandle);
+        client.disconnect(quiesceTimeout, invocationContext, activityToken);
+        connections.remove(clientHandle);
+
+        // the activity has finished using us, so we can stop the service
+        // the activities are bound with BIND_AUTO_CREATE, so the service will
+        // remain around until the last activity disconnects
+        stopSelf();
+    }
+
+    /**
+     * Get the status of a specific client
+     *
+     * @param clientHandle identifies the MqttConnection to use
+     * @return true if the specified client is connected to an MQTT server
+     */
+    public boolean isConnected(String clientHandle) {
+        MqttConnection client = getConnection(clientHandle);
+        return client.isConnected();
+    }
+
+    /**
+     * Publish a message to a topic
+     *
+     * @param clientHandle      identifies the MqttConnection to use
+     * @param topic             the topic to which to publish
+     * @param payload           the content of the message to publish
+     * @param qos               the quality of service requested
+     * @param retained          whether the MQTT server should retain this message
+     * @param invocationContext arbitrary data to be passed back to the application
+     * @param activityToken     arbitrary identifier to be passed back to the Activity
+     * @return token for tracking the operation
+     * @throws MqttPersistenceException when a problem occurs storing the message
+     * @throws MqttException            if there was an error publishing the message
+     */
+    public IMqttDeliveryToken publish(String clientHandle, String topic,
+                                      byte[] payload, int qos, boolean retained,
+                                      String invocationContext, String activityToken)
+            throws MqttPersistenceException, MqttException {
+        MqttConnection client = getConnection(clientHandle);
+        return client.publish(topic, payload, qos, retained, invocationContext,
+                activityToken);
+    }
+
+    /**
+     * Publish a message to a topic
+     *
+     * @param clientHandle      identifies the MqttConnection to use
+     * @param topic             the topic to which to publish
+     * @param message           the message to publish
+     * @param invocationContext arbitrary data to be passed back to the application
+     * @param activityToken     arbitrary identifier to be passed back to the Activity
+     * @return token for tracking the operation
+     * @throws MqttPersistenceException when a problem occurs storing the message
+     * @throws MqttException            if there was an error publishing the message
+     */
+    public IMqttDeliveryToken publish(String clientHandle, String topic,
+                                      MqttMessage message, String invocationContext, String activityToken)
+            throws MqttPersistenceException, MqttException {
+        MqttConnection client = getConnection(clientHandle);
+        return client.publish(topic, message, invocationContext, activityToken);
+    }
+
+    /**
+     * Subscribe to a topic
+     *
+     * @param clientHandle      identifies the MqttConnection to use
+     * @param topic             a possibly wildcarded topic name
+     * @param qos               requested quality of service for the topic
+     * @param invocationContext arbitrary data to be passed back to the application
+     * @param activityToken     arbitrary identifier to be passed back to the Activity
+     */
+    public void subscribe(String clientHandle, String topic, int qos,
+                          String invocationContext, String activityToken) {
+        MqttConnection client = getConnection(clientHandle);
+        client.subscribe(topic, qos, invocationContext, activityToken);
+    }
+
+    /**
+     * Subscribe to one or more topics
+     *
+     * @param clientHandle      identifies the MqttConnection to use
+     * @param topic             a list of possibly wildcarded topic names
+     * @param qos               requested quality of service for each topic
+     * @param invocationContext arbitrary data to be passed back to the application
+     * @param activityToken     arbitrary identifier to be passed back to the Activity
+     */
+    public void subscribe(String clientHandle, String[] topic, int[] qos,
+                          String invocationContext, String activityToken) {
+        MqttConnection client = getConnection(clientHandle);
+        client.subscribe(topic, qos, invocationContext, activityToken);
+    }
+
+    /**
+     * Subscribe using topic filters
+     *
+     * @param clientHandle      identifies the MqttConnection to use
+     * @param topicFilters      a list of possibly wildcarded topicfilters
+     * @param qos               requested quality of service for each topic
+     * @param invocationContext arbitrary data to be passed back to the application
+     * @param activityToken     arbitrary identifier to be passed back to the Activity
+     * @param messageListeners  a callback to handle incoming messages
+     */
+    public void subscribe(String clientHandle, String[] topicFilters, int[] qos, String invocationContext, String activityToken, IMqttMessageListener[] messageListeners) {
+        MqttConnection client = getConnection(clientHandle);
+        client.subscribe(topicFilters, qos, invocationContext, activityToken, messageListeners);
+    }
+
+    /**
+     * Unsubscribe from a topic
+     *
+     * @param clientHandle      identifies the MqttConnection
+     * @param topic             a possibly wildcarded topic name
+     * @param invocationContext arbitrary data to be passed back to the application
+     * @param activityToken     arbitrary identifier to be passed back to the Activity
+     */
+    public void unsubscribe(String clientHandle, final String topic,
+                            String invocationContext, String activityToken) {
+        MqttConnection client = getConnection(clientHandle);
+        client.unsubscribe(topic, invocationContext, activityToken);
+    }
+
+    /**
+     * Unsubscribe from one or more topics
+     *
+     * @param clientHandle      identifies the MqttConnection
+     * @param topic             a list of possibly wildcarded topic names
+     * @param invocationContext arbitrary data to be passed back to the application
+     * @param activityToken     arbitrary identifier to be passed back to the Activity
+     */
+    public void unsubscribe(String clientHandle, final String[] topic,
+                            String invocationContext, String activityToken) {
+        MqttConnection client = getConnection(clientHandle);
+        client.unsubscribe(topic, invocationContext, activityToken);
+    }
+
+    /**
+     * Get tokens for all outstanding deliveries for a client
+     *
+     * @param clientHandle identifies the MqttConnection
+     * @return an array (possibly empty) of tokens
+     */
+    public IMqttDeliveryToken[] getPendingDeliveryTokens(String clientHandle) {
+        MqttConnection client = getConnection(clientHandle);
+        return client.getPendingDeliveryTokens();
+    }
+
+    /**
+     * Get the MqttConnection identified by this client handle
+     *
+     * @param clientHandle identifies the MqttConnection
+     * @return the MqttConnection identified by this handle
+     */
+    private MqttConnection getConnection(String clientHandle) {
+        MqttConnection client = connections.get(clientHandle);
+        if (client == null) {
+            throw new IllegalArgumentException("Invalid ClientHandle");
+        }
+        return client;
+    }
+
+    /**
+     * Called by the Activity when a message has been passed back to the
+     * application
+     *
+     * @param clientHandle identifier for the client which received the message
+     * @param id           identifier for the MQTT message
+     * @return {@link Status}
+     */
+    public Status acknowledgeMessageArrival(String clientHandle, String id) {
+        if (messageStore.discardArrived(clientHandle, id)) {
+            return Status.OK;
+        } else {
+            return Status.ERROR;
+        }
+    }
+
+
+    /**
+     * Identify the callbackId to be passed when making tracing calls back into
+     * the Activity
+     *
+     * @param traceCallbackId identifier to the callback into the Activity
+     */
+    public void setTraceCallbackId(String traceCallbackId) {
+        this.traceCallbackId = traceCallbackId;
+    }
+
+    /**
+     * Turn tracing on and off
+     *
+     * @param traceEnabled set <code>true</code> to turn on tracing, <code>false</code> to turn off tracing
+     */
+    public void setTraceEnabled(boolean traceEnabled) {
+        this.traceEnabled = traceEnabled;
+    }
+
+    /**
+     * Check whether trace is on or off.
+     *
+     * @return the state of trace
+     */
+    public boolean isTraceEnabled() {
+        return this.traceEnabled;
+    }
+
+    /**
+     * Trace debugging information
+     *
+     * @param tag     identifier for the source of the trace
+     * @param message the text to be traced
+     */
+    @Override
+    public void traceDebug(String tag, String message) {
+        traceCallback(MqttServiceConstants.TRACE_DEBUG, tag, message);
+    }
+
+    /**
+     * Trace error information
+     *
+     * @param tag     identifier for the source of the trace
+     * @param message the text to be traced
+     */
+    @Override
+    public void traceError(String tag, String message) {
+        traceCallback(MqttServiceConstants.TRACE_ERROR, tag, message);
+    }
+
+    private void traceCallback(String severity, String tag, String message) {
+        if ((traceCallbackId != null) && (traceEnabled)) {
+            Bundle dataBundle = new Bundle();
+            dataBundle.putString(MqttServiceConstants.CALLBACK_ACTION, MqttServiceConstants.TRACE_ACTION);
+            dataBundle.putString(MqttServiceConstants.CALLBACK_TRACE_SEVERITY, severity);
+            dataBundle.putString(MqttServiceConstants.CALLBACK_TRACE_TAG, tag);
+            //dataBundle.putString(MqttServiceConstants.CALLBACK_TRACE_ID, traceCallbackId);
+            dataBundle.putString(MqttServiceConstants.CALLBACK_ERROR_MESSAGE, message);
+            callbackToActivity(traceCallbackId, Status.ERROR, dataBundle);
+        }
+    }
+
+    /**
+     * trace exceptions
+     *
+     * @param tag     identifier for the source of the trace
+     * @param message the text to be traced
+     * @param e       the exception
+     */
+    @Override
+    public void traceException(String tag, String message, Exception e) {
+        if (traceCallbackId != null) {
+            Bundle dataBundle = new Bundle();
+            dataBundle.putString(MqttServiceConstants.CALLBACK_ACTION, MqttServiceConstants.TRACE_ACTION);
+            dataBundle.putString(MqttServiceConstants.CALLBACK_TRACE_SEVERITY, MqttServiceConstants.TRACE_EXCEPTION);
+            dataBundle.putString(MqttServiceConstants.CALLBACK_ERROR_MESSAGE, message);
+            dataBundle.putSerializable(MqttServiceConstants.CALLBACK_EXCEPTION, e); //TODO: Check
+            dataBundle.putString(MqttServiceConstants.CALLBACK_TRACE_TAG, tag);
+            //dataBundle.putString(MqttServiceConstants.CALLBACK_TRACE_ID, traceCallbackId);
+            callbackToActivity(traceCallbackId, Status.ERROR, dataBundle);
+        }
+    }
+
+    @SuppressWarnings("deprecation")
+    private void registerBroadcastReceivers() {
+        if (networkConnectionMonitor == null) {
+            networkConnectionMonitor = new NetworkConnectionIntentReceiver();
+            registerReceiver(networkConnectionMonitor, new IntentFilter(
+                    ConnectivityManager.CONNECTIVITY_ACTION));
+        }
+
+        if (Build.VERSION.SDK_INT < 14 /**Build.VERSION_CODES.ICE_CREAM_SANDWICH**/) {
+            // Support the old system for background data preferences
+            ConnectivityManager cm = (ConnectivityManager) getSystemService(CONNECTIVITY_SERVICE);
+            backgroundDataEnabled = cm.getBackgroundDataSetting();
+            if (backgroundDataPreferenceMonitor == null) {
+                backgroundDataPreferenceMonitor = new BackgroundDataPreferenceReceiver();
+                registerReceiver(
+                        backgroundDataPreferenceMonitor,
+                        new IntentFilter(
+                                ConnectivityManager.ACTION_BACKGROUND_DATA_SETTING_CHANGED));
+            }
+        }
+    }
+
+    private void unregisterBroadcastReceivers() {
+        if (networkConnectionMonitor != null) {
+            unregisterReceiver(networkConnectionMonitor);
+            networkConnectionMonitor = null;
+        }
+
+        if (Build.VERSION.SDK_INT < 14 /**Build.VERSION_CODES.ICE_CREAM_SANDWICH**/) {
+            if (backgroundDataPreferenceMonitor != null) {
+                unregisterReceiver(backgroundDataPreferenceMonitor);
+            }
+        }
+    }
+
+    /*
+     * Called in response to a change in network connection - after losing a
+     * connection to the server, this allows us to wait until we have a usable
+     * data connection again
+     */
+    private class NetworkConnectionIntentReceiver extends BroadcastReceiver {
+
+        @Override
+        @SuppressLint("Wakelock")
+        public void onReceive(Context context, Intent intent) {
+            traceDebug(TAG, "Internal network status receive.");
+            // we protect against the phone switching off
+            // by requesting a wake lock - we request the minimum possible wake
+            // lock - just enough to keep the CPU running until we've finished
+            PowerManager pm = (PowerManager) getSystemService(POWER_SERVICE);
+            @SuppressLint("InvalidWakeLockTag") WakeLock wl = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "MQTT");
+            wl.acquire();
+            traceDebug(TAG, "Reconnect for Network recovery.");
+            if (isOnline()) {
+                traceDebug(TAG, "Online,reconnect.");
+                // we have an internet connection - have another try at
+                // connecting
+                reconnect();
+            } else {
+                notifyClientsOffline();
+            }
+
+            wl.release();
+        }
+    }
+
+    /**
+     * @return whether the android service can be regarded as online
+     */
+    public boolean isOnline() {
+        ConnectivityManager cm = (ConnectivityManager) getSystemService(CONNECTIVITY_SERVICE);
+        NetworkInfo networkInfo = cm.getActiveNetworkInfo();
+        //noinspection RedundantIfStatement
+        if (networkInfo != null
+                && networkInfo.isAvailable()
+                && networkInfo.isConnected()
+                && backgroundDataEnabled) {
+            return true;
+        }
+
+        return false;
+    }
+
+    /**
+     * Notify clients we're offline
+     */
+    private void notifyClientsOffline() {
+        for (MqttConnection connection : connections.values()) {
+            connection.offline();
+        }
+    }
+
+    /**
+     * Detect changes of the Allow Background Data setting - only used below
+     * ICE_CREAM_SANDWICH
+     */
+    private class BackgroundDataPreferenceReceiver extends BroadcastReceiver {
+
+        @SuppressWarnings("deprecation")
+        @Override
+        public void onReceive(Context context, Intent intent) {
+            ConnectivityManager cm = (ConnectivityManager) getSystemService(CONNECTIVITY_SERVICE);
+            traceDebug(TAG, "Reconnect since BroadcastReceiver.");
+            if (cm.getBackgroundDataSetting()) {
+                if (!backgroundDataEnabled) {
+                    backgroundDataEnabled = true;
+                    // we have the Internet connection - have another try at
+                    // connecting
+                    reconnect();
+                }
+            } else {
+                backgroundDataEnabled = false;
+                notifyClientsOffline();
+            }
+        }
+    }
+
+    /**
+     * Sets the DisconnectedBufferOptions for this client
+     *
+     * @param clientHandle identifier for the client
+     * @param bufferOpts   the DisconnectedBufferOptions for this client
+     */
+    public void setBufferOpts(String clientHandle, DisconnectedBufferOptions bufferOpts) {
+        MqttConnection client = getConnection(clientHandle);
+        client.setBufferOpts(bufferOpts);
+    }
+
+    public int getBufferedMessageCount(String clientHandle) {
+        MqttConnection client = getConnection(clientHandle);
+        return client.getBufferedMessageCount();
+    }
+
+    public MqttMessage getBufferedMessage(String clientHandle, int bufferIndex) {
+        MqttConnection client = getConnection(clientHandle);
+        return client.getBufferedMessage(bufferIndex);
+    }
+
+    public void deleteBufferedMessage(String clientHandle, int bufferIndex) {
+        MqttConnection client = getConnection(clientHandle);
+        client.deleteBufferedMessage(bufferIndex);
+    }
 
 
 }

@@ -8,7 +8,7 @@ import retrofit2.http.Query;
 
 public interface ApiEndpoints {
     @PUT("dapi/locations")
-    Call<DriverLocation> updateDriverLocation(@Body DriverLocation driverLocation, @Query("lat") double lat, @Query("lng") double lng, @Query("driver_id") String driver_id, @Query("trip_id") String trip_id);
+    Call<DriverLocation> updateDriverLocation(@Body DriverLocation driverLocation, @Query("lat") double lat, @Query("lng") double lng, @Query("driver_id") String driver_id);
 
     @PUT("dapi/mqstatus")
     Call<DriverLocation> updateDriverMqStatus(@Body DriverLocation driverLocation, @Query("is_mq_alive") int is_mq_alive, @Query("driver_id") String driver_id);

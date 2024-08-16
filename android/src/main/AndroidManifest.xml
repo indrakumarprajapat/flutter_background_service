@@ -13,8 +13,8 @@
     <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
     <uses-permission android:name="android.permission.INTERNET" />
-
-
+    <uses-permission android:name="android.permission.READ_PHONE_STATE" />
+    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM"/>
 
 
     <application>
@@ -22,9 +22,7 @@
             android:name=".BackgroundService"
             android:enabled="true"
             android:exported="true"
-
             android:foregroundServiceType="location" />
-
         <receiver
             android:name="id.flutter.flutter_background_service.WatchdogReceiver"
             android:enabled="true"
