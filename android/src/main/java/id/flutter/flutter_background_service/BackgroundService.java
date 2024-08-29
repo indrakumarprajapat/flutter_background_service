@@ -994,12 +994,16 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
 //    }
 
     private void initializeConnection() {
-        if (mqttAndroidClient == null) {
-            isMqAlive = false;
-            String serverHost = BackgroundService.getMqServerHost(this);
-            int serverPort = BackgroundService.getMqPort(this);
-            String clientId = BackgroundService.getMqClientId(this);
+        String driverId = BackgroundService.getDriverId(this);
+        String mobileNo = getDriverMobileNo(this);
 
+        if (driverId != null && mobileNo != null &&
+                driverId != "" && driverId != "0" &&
+                mobileNo != "" && mobileNo != "0" && mqttAndroidClient == null) {
+            int serverPort = BackgroundService.getMqPort(this);
+            String serverHost = BackgroundService.getMqServerHost(this);
+            isMqAlive = false;
+            String clientId = Constants.MQ_ENV_PREFIX + "D-" + driverId + "-" + mobileNo;
             mqttAndroidClient = new MqttAndroidClient(getApplicationContext(), serverHost, clientId);
 
 //            mqttAndroidClient = Mqtt3Client.builder()
@@ -1055,10 +1059,27 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
     }
 
     private void connectMqtt() {
+        if(!isOnlineFlag()){
+            return;
+        }
+        if(mqttAndroidClient == null) {
+            String driverId = BackgroundService.getDriverId(this);
+            String mobileNo = getDriverMobileNo(this);
+
+            if (driverId != null && mobileNo != null &&
+                    driverId != "" && driverId != "0" &&
+                    mobileNo != "" && mobileNo != "0" && mqttAndroidClient == null) {
+                int serverPort = BackgroundService.getMqPort(this);
+                String serverHost = BackgroundService.getMqServerHost(this);
+                isMqAlive = false;
+                String clientId = Constants.MQ_ENV_PREFIX + "D-" + driverId + "-" + mobileNo;
+                mqttAndroidClient = new MqttAndroidClient(getApplicationContext(), serverHost, clientId);
+            }
+        }
+
         if (isRunning.get() && mqttAndroidClient != null && !mqttAndroidClient.isConnected()) {
             String username = BackgroundService.getMqUsername(this);
             String password = BackgroundService.getMqPassword(this);
-
             try {
                 MqttConnectOptions options = new MqttConnectOptions();
                 options.setUserName(username);
@@ -1552,6 +1573,14 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
 //                     String dId = getDriverId(this);
 //                     subscribeTopic(Constants.MQ_ENV_PREFIX + "/" + "rd/rq/" + dId);
                 }
+            }else if(top.startsWith(Constants.MQ_ENV_PREFIX + "/" + "driver_offline")){
+                setIsOnline(false);
+                if(mqttAndroidClient != null && mqttAndroidClient.isConnected()){
+                    mqttAndroidClient.disconnect();
+                }
+            }else if(top.startsWith(Constants.MQ_ENV_PREFIX + "/" + "driver_online")){
+                setIsOnline(true);
+                connectMqtt();
             }
         } catch (Exception e) {
             e.printStackTrace();
@@ -1611,7 +1640,9 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
                 } else if (action.equals("setDriverDetails")) {
                     String driverId = data.getString("driver_id");
                     String apiToken = data.getString("api_token");
+                    String driverMobileNo = data.getString("driver_mobile_no");
                     setDriverId(driverId);
+                    setDriverMobileNo(driverMobileNo);
                     setApiTokenValue(apiToken);
                     if (driverId != null && driverId.length() > 0) {
                         subscribeTopic(Constants.MQ_ENV_PREFIX + "/rd/handshake/" + driverId);
@@ -2049,7 +2080,15 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
         SharedPreferences pref = context.getSharedPreferences("id.flutter.background_service", MODE_PRIVATE);
         return pref.getBoolean("is_service_start", true);
     }
+    public void setIsOnline(boolean value) {
+        SharedPreferences pref = getSharedPreferences("id.flutter.background_service", MODE_PRIVATE);
+        pref.edit().putBoolean("is_online", value).apply();
+    }
 
+    public boolean isOnlineFlag() {
+        SharedPreferences pref = getSharedPreferences("id.flutter.background_service", MODE_PRIVATE);
+        return pref.getBoolean("is_online", false);
+    }
     public void setManuallyStopped(boolean value) {
         SharedPreferences pref = getSharedPreferences("id.flutter.background_service", MODE_PRIVATE);
         pref.edit().putBoolean("is_manually_stopped", value).apply();
@@ -2118,6 +2157,16 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
     public void setDriverId(String driverId) {
         SharedPreferences pref = getSharedPreferences("id.flutter.background_service", MODE_PRIVATE);
         pref.edit().putString("driver_id", driverId).apply();
+    }
+
+    public void setDriverMobileNo(String mobileNo) {
+        SharedPreferences pref = getSharedPreferences("id.flutter.background_service", MODE_PRIVATE);
+        pref.edit().putString("driver_mobile_no", mobileNo).apply();
+    }
+
+    public static String getDriverMobileNo(Context context) {
+        SharedPreferences pref = context.getSharedPreferences("id.flutter.background_service", MODE_PRIVATE);
+        return pref.getString("driver_mobile_no", "0");
     }
 
     public static String getDriverId(Context context) {
