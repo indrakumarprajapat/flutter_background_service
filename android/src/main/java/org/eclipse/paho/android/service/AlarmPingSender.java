@@ -25,6 +25,9 @@ import android.os.PowerManager;
 import android.os.PowerManager.WakeLock;
 import android.util.Log;
 
+import androidx.annotation.RequiresApi;
+import androidx.core.content.ContextCompat;
+
 import org.eclipse.paho.client.mqttv3.IMqttActionListener;
 import org.eclipse.paho.client.mqttv3.IMqttToken;
 import org.eclipse.paho.client.mqttv3.MqttPingSender;
@@ -49,6 +52,7 @@ class AlarmPingSender implements MqttPingSender {
 	private ClientComms comms;
 	private BackgroundService service;
 	private BroadcastReceiver alarmReceiver;
+	private ContextCompat alarmReceiver2;
 	private AlarmPingSender that;
 	private PendingIntent pendingIntent;
 	private volatile boolean hasStarted = false;
@@ -68,24 +72,46 @@ class AlarmPingSender implements MqttPingSender {
 		this.alarmReceiver = new AlarmReceiver();
 	}
 
-	@Override
+	@RequiresApi(api = Build.VERSION_CODES.TIRAMISU)
+    @Override
 	public void start() {
 		String action = MqttServiceConstants.PING_SENDER
 				+ comms.getClient().getClientId();
 		Log.d(TAG, "Register alarmreceiver to MqttService"+ action);
-		service.registerReceiver(alarmReceiver, new IntentFilter(action));
 
-//		if(Build.VERSION.SDK_INT >= Build.VERSION_CODES.S){
+		service.registerReceiver(alarmReceiver, new IntentFilter(action), Context.RECEIVER_EXPORTED);
+
+		if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
 			pendingIntent = PendingIntent.getBroadcast(service, 0, new Intent(
 					action), PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
-//		}else{
-//			pendingIntent = PendingIntent.getBroadcast(service, 0, new Intent(
-//					action), PendingIntent.FLAG_UPDATE_CURRENT);
-//		}
+		} else {
+			pendingIntent = PendingIntent.getBroadcast(service, 0, new Intent(
+					action), PendingIntent.FLAG_UPDATE_CURRENT);
+		}
 
 		schedule(comms.getKeepAlive());
 		hasStarted = true;
+
 	}
+
+//	@Override
+//	public void start() {
+//		String action = MqttServiceConstants.PING_SENDER
+//				+ comms.getClient().getClientId();
+//		Log.d(TAG, "Register alarmreceiver to MqttService"+ action);
+//		service.registerReceiver(alarmReceiver, new IntentFilter(action));
+//
+////		if(Build.VERSION.SDK_INT >= Build.VERSION_CODES.S){
+//			pendingIntent = PendingIntent.getBroadcast(service, 0, new Intent(
+//					action), PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+////		}else{
+////			pendingIntent = PendingIntent.getBroadcast(service, 0, new Intent(
+////					action), PendingIntent.FLAG_UPDATE_CURRENT);
+////		}
+//
+//		schedule(comms.getKeepAlive());
+//		hasStarted = true;
+//	}
 
 	@Override
 	public void stop() {

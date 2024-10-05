@@ -1084,6 +1084,7 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
                 MqttConnectOptions options = new MqttConnectOptions();
                 options.setUserName(username);
                 options.setPassword(password.toCharArray());
+                options.setKeepAliveInterval(25);
 
                 mqttAndroidClient.setCallback(new MqttCallbackExtended() {
                     @Override
@@ -2702,12 +2703,18 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
         }
     }
 
+    @RequiresApi(api = Build.VERSION_CODES.TIRAMISU)
     @SuppressWarnings("deprecation")
     private void registerBroadcastReceivers() {
         if (networkConnectionMonitor == null) {
             networkConnectionMonitor = new NetworkConnectionIntentReceiver();
+
+//            registerReceiver(networkConnectionMonitor, new IntentFilter(
+//                    ConnectivityManager.CONNECTIVITY_ACTION));
+
             registerReceiver(networkConnectionMonitor, new IntentFilter(
-                    ConnectivityManager.CONNECTIVITY_ACTION));
+                    ConnectivityManager.CONNECTIVITY_ACTION),RECEIVER_EXPORTED);
+
         }
 
         if (Build.VERSION.SDK_INT < 14 /**Build.VERSION_CODES.ICE_CREAM_SANDWICH**/) {
