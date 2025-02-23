@@ -120,7 +120,12 @@ class FlutterBackgroundService {
   Future<dynamic> _handle(MethodCall call) async {
     switch (call.method) {
       case "onReceiveData":
-        _streamController.sink.add(call.arguments);
+        if(_streamController.isClosed){
+          _streamController = StreamController.broadcast();
+          _streamController.sink.add(call.arguments);
+        }else{
+          _streamController.sink.add(call.arguments);
+        }
         break;
       default:
     }

@@ -255,7 +255,7 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
 
         createLocationRequest();
         getLastLocation();
-//        startTracking();
+        startTracking();
         periodicUpdateIsBgService();
         updateNotificationInfo();
 
@@ -289,9 +289,10 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
     // Location tracking >>>>>
     private void createLocationRequest() {
         locationRequest = LocationRequest.create();
-        locationRequest.setInterval(getInterval(this));
-        locationRequest.setFastestInterval(getFastestInterval(this));
-        locationRequest.setPriority(getLocationPriority(this));
+//        locationRequest.setInterval(5000);
+        locationRequest.setFastestInterval(1500);
+        locationRequest.setPriority(100);
+        locationRequest.setSmallestDisplacement(2);
     }
 
     private void getLastLocation() {
@@ -349,8 +350,6 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
             mqData.put("LocationValue", sb.toString());
         } catch (JSONException e) {
             e.printStackTrace();
-
-
         }
         String appState = getAppStateValue(this);
 
@@ -367,7 +366,7 @@ public class BackgroundService extends Service implements MethodChannel.MethodCa
             } else {
                 String locUpdateTopicOnline = getLocUpdateTopicOnline(this);
                 if (locUpdateTopicOnline.isEmpty()) {
-                    locUpdateTopicOnline = Constants.MQ_ENV_PREFIX + "/drivers_curr_loc/" + getDriverId(this) + "/newlocQoS";
+                    locUpdateTopicOnline = Constants.MQ_ENV_PREFIX + "/drivers_curr_loc/" + getDriverId(this) + "/newloc";
                 }
                 publishMessage(Constants.MQ_ENV_PREFIX + "/" + locUpdateTopicOnline, locUpdatePayload);
 
